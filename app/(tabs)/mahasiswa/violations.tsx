@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   cardType: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   cardExam: { color: '#F3EFEF', fontSize: 12, opacity: 0.85, marginBottom: 4 },
   cardTimestamp: { color: '#D1D1D1', fontSize: 11 },
-  footer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 24, marginBottom: 20 },
-  footerText: { color: '#61141A', fontWeight: '600', flex: 1, opacity: 0.6 },
-  footerIllustration: { width: 150, height: 120 },
+  footer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginHorizontal: 24, marginBottom: 20, height: 110 },
+  footerText: { fontSize: 14, color: '#61141A', fontWeight: '600', opacity: 0.4, flex: 1 },
+  footerIllustration: { width: 150, height: 120, position: 'absolute', right: -10, bottom: -20 },
 });

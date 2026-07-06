@@ -216,13 +216,13 @@ function buildCertificateHtml(item: any, logos: { stikom: string | null; merdeka
             <div class="innerFrame">
 
               <div class="headerRow">
-                ${logos.stikom ? `<img class="logo" src="${logos.stikom}" />` : `<div style="width:80px; height:80px"></div>`}
+                ${logos.stikom ? `<img class="logo" src="${logos.stikom}" />` : `<div style="width:64px"></div>`}
                 <div class="headerCenter">
                   <p class="instName1">${INSTITUTION.line1}</p>
                   <p class="instName2">${INSTITUTION.line2}</p>
                   <p class="instAddress">${INSTITUTION.address}</p>
                 </div>
-                ${logos.merdeka ? `<img class="logo" src="${logos.merdeka}" />` : `<div style="width:80px; height:80px"></div>`}
+                ${logos.merdeka ? `<img class="logo" src="${logos.merdeka}" />` : `<div style="width:64px"></div>`}
               </div>
 
               <div class="divider"></div>
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   downloadText: { color: '#61141A', fontSize: 13, fontWeight: 'bold' },
-  footer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 24, marginBottom: 20 },
-  footerText: { color: '#61141A', fontWeight: '600', flex: 1, opacity: 0.6 },
-  footerIllustration: { width: 150, height: 120 },
+  footer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginHorizontal: 24, marginBottom: 20, height: 110 },
+  footerText: { fontSize: 14, color: '#61141A', fontWeight: '600', opacity: 0.4, flex: 1 },
+  footerIllustration: { width: 150, height: 120, position: 'absolute', right: -10, bottom: -20 },
 });

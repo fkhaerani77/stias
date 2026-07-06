@@ -2,18 +2,18 @@ import { useNavigation, useRouter } from 'expo-router';
 import { AlertTriangle, CheckCircle, LayoutGrid, Timer } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  AppState,
-  BackHandler,
-  Image,
-  Modal,
-  Platform,
-  StatusBar as RNStatusBar,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    AppState,
+    BackHandler,
+    Image,
+    Modal,
+    Platform,
+    StatusBar as RNStatusBar,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 // Tambahkan import context
 import { useExam } from '../../context/ExamContext';
@@ -164,6 +164,12 @@ export default function ExamScreen() {
         setAnswers({ ...answers, [currentQuestion.id]: key });
     };
 
+    // Pindah ke soal tertentu lewat Question List, lalu tutup modal
+    const handleJumpToQuestion = (index: number) => {
+        setCurrentQuestionIndex(index);
+        setIsListModalVisible(false);
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
@@ -257,7 +263,60 @@ export default function ExamScreen() {
                 </View>
             </Modal>
 
-            {/* (Bagian List Modal Anda di sini) */}
+            {/* Modal Question List — grid navigasi soal */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={isListModalVisible}
+                onRequestClose={() => setIsListModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.listModalContent}>
+                        <View style={styles.listHeader}>
+                            <Text style={styles.listTitle}>Question List</Text>
+                            <TouchableOpacity onPress={() => setIsListModalVisible(false)}>
+                                <Text style={styles.closeButton}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.gridContainer}>
+                            {DUMMY_QUESTIONS.map((q, index) => {
+                                const isAnswered = !!answers[q.id];
+                                const isCurrent = index === currentQuestionIndex;
+                                return (
+                                    <TouchableOpacity
+                                        key={q.id}
+                                        style={[
+                                            styles.gridBox,
+                                            isCurrent ? styles.gridCurrent : isAnswered ? styles.gridAnswered : styles.gridUnanswered,
+                                        ]}
+                                        onPress={() => handleJumpToQuestion(index)}
+                                    >
+                                        <Text style={[styles.gridText, isCurrent && { color: '#FFFFFF' }]}>
+                                            {q.number}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        <View style={styles.legendContainer}>
+                            <View style={styles.legendItem}>
+                                <View style={[styles.dot, { backgroundColor: '#00E676' }]} />
+                                <Text style={styles.legendText}>Answered</Text>
+                            </View>
+                            <View style={styles.legendItem}>
+                                <View style={[styles.dot, { backgroundColor: '#2196F3' }]} />
+                                <Text style={styles.legendText}>Current</Text>
+                            </View>
+                            <View style={styles.legendItem}>
+                                <View style={[styles.dot, { backgroundColor: '#FFFFFF' }]} />
+                                <Text style={styles.legendText}>Unanswered</Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }

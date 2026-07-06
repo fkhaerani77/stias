@@ -1,20 +1,28 @@
 import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react-native';
 import React from 'react';
 import {
-    Image,
-    Platform,
-    StatusBar as RNStatusBar,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Image,
+  Platform,
+  StatusBar as RNStatusBar,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { useExam } from '../../context/ExamContext';
+
+const EXAM_TITLE = 'National Competency Test';
 
 export default function ExamInfoScreen() {
   const router = useRouter();
+  const { history } = useExam();
+
+  // Cek apakah ujian ini sudah pernah dikerjakan sebelumnya
+  const completedExam = (history || []).find((item: any) => item.title === EXAM_TITLE);
+  const isCompleted = !!completedExam;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -69,13 +77,13 @@ export default function ExamInfoScreen() {
           <View style={styles.examCard}>
             <View style={styles.examCardHeader}>
               <Text style={styles.examCardTitle}>Exam Information</Text>
-              <View style={styles.greenDot} />
+              <View style={[styles.statusDot, { backgroundColor: isCompleted ? '#9CA3AF' : '#00E676' }]} />
             </View>
 
             <View style={styles.infoRow}>
               <Text style={styles.examLabel}>Category</Text>
               <Text style={styles.examColon}>:</Text>
-              <Text style={styles.examValue}>National Competency Test</Text>
+              <Text style={styles.examValue}>{EXAM_TITLE}</Text>
             </View>
 
             <View style={styles.infoRow}>
@@ -99,14 +107,25 @@ export default function ExamInfoScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.examLabel}>Status</Text>
               <Text style={styles.examColon}>:</Text>
-              <Text style={styles.examValue}>Ready</Text>
+              <Text style={styles.examValue}>{isCompleted ? 'Selesai' : 'Ready'}</Text>
             </View>
 
-            <TouchableOpacity 
-              style={styles.startExamButton}
-                onPress={() => router.push('/mahasiswa/exam' as any)}            >
-              <Text style={styles.startExamText}>Start Exam {'>'}</Text>
-            </TouchableOpacity>
+            {isCompleted ? (
+              // Sudah dikerjakan: tombol Start Exam disembunyikan, ganti dengan info selesai
+              <View style={styles.completedRow}>
+                <CheckCircle2 color="#00E676" size={18} />
+                <Text style={styles.completedText}>
+                  Anda sudah menyelesaikan ujian ini (Score: {completedExam.score}%)
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.startExamButton}
+                onPress={() => router.push('/mahasiswa/exam' as any)}
+              >
+                <Text style={styles.startExamText}>Start Exam {'>'}</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* 4. Before You Begin Rules */}
@@ -155,9 +174,9 @@ const styles = StyleSheet.create({
     color: '#61141A',
   },
   scrollContainer: {
-    flexGrow: 1, // KUNCI UTAMA: Agar konten bisa mengisi sisa ruang layar gawai
+    flexGrow: 1,
     paddingHorizontal: 24,
-    justifyContent: 'space-between', // Tetap mendorong footer ke bawah selama muat satu layar
+    justifyContent: 'space-between',
     paddingBottom: Platform.OS === 'ios' ? 10 : 20,
   },
   candidateCard: {
@@ -214,11 +233,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  greenDot: {
+  statusDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#00E676',
   },
   examLabel: {
     width: 100,
@@ -249,9 +267,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
   },
+  completedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 10,
+  },
+  completedText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 16,
+  },
   rulesContainer: {
     paddingHorizontal: 4,
-    marginBottom: 20, // Tambah margin bawah sedikit untuk jaga-jaga saat di-scroll
+    marginBottom: 20,
   },
   rulesTitle: {
     fontSize: 18,
@@ -270,16 +304,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     height: 110,
-    position: 'relative',
     marginTop: 10,
   },
   footerSlogan: {
     fontSize: 14,
     color: '#61141A',
     fontWeight: '600',
-    paddingBottom: 15,
-    flex: 1,
     opacity: 0.4,
+    flex: 1,
   },
   footerIllustration: {
     width: 150,

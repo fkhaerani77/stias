@@ -133,9 +133,9 @@ const styles = StyleSheet.create({
   correctText: { color: '#F3EFEF', fontSize: 12 },
   statusText: { fontSize: 13, fontWeight: 'bold' },
   tapHint: { color: '#FFD700', fontSize: 12, fontWeight: '600', marginTop: 8, textAlign: 'right' },
-  footer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 24, marginBottom: 20 },
-  footerText: { color: '#61141A', fontWeight: '600', flex: 1, opacity: 0.6 },
-  footerIllustration: { width: 150, height: 120 },
+  footer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginHorizontal: 24, marginBottom: 20, height: 110 },
+  footerText: { fontSize: 14, color: '#61141A', fontWeight: '600', opacity: 0.4, flex: 1 },
+  footerIllustration: { width: 150, height: 120, position: 'absolute', right: -10, bottom: -20 },
 
   // Modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },

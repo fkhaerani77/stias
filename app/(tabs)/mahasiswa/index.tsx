@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Award, Bell, ClipboardList, History, ShieldAlert, Sparkles } from 'lucide-react-native';
+import { Award, Bell, ClipboardList, ShieldAlert, Sparkles } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   Image,
@@ -113,19 +113,7 @@ export default function DashboardScreen() {
             <Text style={styles.menuDesc}>Start Assessment</Text>
           </TouchableOpacity>
 
-          {/* Menu 2: Exam History */}
-          <TouchableOpacity 
-              style={styles.menuBox} 
-              onPress={() => router.push('/mahasiswa/exam-history')} // Tambahkan baris ini
-            >
-              <View style={styles.menuHeaderRow}>
-                <History color="#FFFFFF" size={24} />
-                <Text style={styles.menuTitle}>Exam History</Text>
-              </View>
-              <Text style={styles.menuDesc}>You don't have exam history</Text>
-            </TouchableOpacity>
-
-          {/* Menu 3: Score */}
+          {/* Menu 2: Score */}
           <TouchableOpacity
             style={styles.menuBox}
             onPress={() => router.push('/mahasiswa/score' as any)}
@@ -148,21 +136,18 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.menuDesc}>View and download your certificates</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Menu 5: Integrity Report (Gaya Outline Elegan Kontras) */}
-        <TouchableOpacity
-          style={styles.longMenuBox}
-          onPress={() => router.push('/mahasiswa/violations' as any)}
-        >
-          <View style={styles.longMenuLeft}>
-            <ShieldAlert color="#61141A" size={24} />
-            <View style={styles.longMenuTextContainer}>
-              <Text style={styles.longMenuTitle}>Integrity Report</Text>
-              <Text style={styles.longMenuDesc}>See recorded exam activities</Text>
+          {/* Menu 4: Integrity Report */}
+          <TouchableOpacity
+            style={styles.menuBox}
+            onPress={() => router.push('/mahasiswa/violations' as any)}
+          >
+            <View style={styles.menuHeaderRow}>
+              <ShieldAlert color="#FFFFFF" size={24} />
+              <Text style={styles.menuTitle}>Integrity Report</Text>
             </View>
-          </View>
-        </TouchableOpacity>
+            <Text style={styles.menuDesc}>See recorded exam activities</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* 6. Footer */}
         <View style={styles.footerContainer}>
@@ -331,21 +316,20 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     marginTop: 10,
-    height: 120,
+    height: 110,
   },
   footerSlogan: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#61141A',
     fontWeight: '600',
-    paddingBottom: 20,
+    opacity: 0.4,
     flex: 1,
-    opacity: 0.6,
   },
   footerIllustration: {
     width: 150,
     height: 120,
     position: 'absolute',
-    right: -10,
-    bottom: -20,
+    right: -24,
+    bottom: -40,
   },
 });
