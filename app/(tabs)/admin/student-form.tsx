@@ -2,15 +2,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, Copy, KeyRound, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    StatusBar as RNStatusBar,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  StatusBar as RNStatusBar,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useExam } from '../../context/ExamContext';
 
@@ -29,8 +29,8 @@ export default function AdminStudentFormScreen() {
   const [kelas, setKelas] = useState('');
   const [tahun, setTahun] = useState('');
   const [prodi, setProdi] = useState(PRODI_OPTIONS[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Kredensial yang baru saja digenerate (ditampilkan sekali setelah submit tambah baru)
   const [generatedAccount, setGeneratedAccount] = useState<{ username: string; password: string } | null>(null);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function AdminStudentFormScreen() {
     }
   }, [existingStudent?.id]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim() || !nim.trim() || !kelas.trim() || !tahun.trim()) {
       Alert.alert('Data Belum Lengkap', 'Semua field wajib diisi.');
       return;
@@ -55,15 +55,20 @@ export default function AdminStudentFormScreen() {
         { text: 'OK', onPress: () => router.replace('/admin/students' as any) },
       ]);
     } else {
-      // Cek NIM belum dipakai mahasiswa lain
       const nimExists = (students || []).some((s: any) => s.nim === nim);
       if (nimExists) {
         Alert.alert('NIM Sudah Terdaftar', 'NIM ini sudah dipakai mahasiswa lain.');
         return;
       }
-      const newStudent = addStudent({ name, nim, kelas, tahun, prodi, status: 'Aktif' });
-      // Tampilkan kredensial hasil generate — ini kesempatan satu-satunya admin melihat passwordnya
-      setGeneratedAccount({ username: newStudent.username, password: newStudent.password });
+      setIsSubmitting(true);
+      try {
+        const newStudent = await addStudent({ name, nim, kelas, tahun, prodi, status: 'Aktif' });
+        setGeneratedAccount({ username: newStudent.username, password: newStudent.password });
+      } catch (error: any) {
+        Alert.alert('Gagal Membuat Akun', error.message);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -96,7 +101,6 @@ export default function AdminStudentFormScreen() {
     ]);
   };
 
-  // Layar konfirmasi kredensial — muncul setelah akun baru berhasil dibuat / password direset
   if (generatedAccount) {
     return (
       <SafeAreaView style={styles.container}>
@@ -107,7 +111,7 @@ export default function AdminStudentFormScreen() {
           </View>
           <Text style={styles.successTitle}>Akun Berhasil Dibuat</Text>
           <Text style={styles.successSubtitle}>
-            Catat / salin kredensial ini dan berikan ke mahasiswa. Password tidak bisa dilihat lagi setelah ini.
+            Catat / salin kredensial ini dan berikan ke mahasiswa.
           </Text>
 
           <View style={styles.credentialCard}>
@@ -159,6 +163,21 @@ export default function AdminStudentFormScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.formContainer} showsVerticalScrollIndicator={false}>
+        {/* Kartu kredensial — tampil di mode edit, biar admin bisa lihat lagi kapan saja */}
+        {isEditMode && existingStudent && (
+          <View style={styles.credentialCard}>
+            <View style={styles.credentialRow}>
+              <Text style={styles.credentialLabel}>Username</Text>
+              <Text style={styles.credentialValue}>{existingStudent.username}</Text>
+            </View>
+            <View style={styles.credentialDivider} />
+            <View style={styles.credentialRow}>
+              <Text style={styles.credentialLabel}>Password</Text>
+              <Text style={styles.credentialValue}>{existingStudent.password}</Text>
+            </View>
+          </View>
+        )}
+
         <FieldGroup label="Nama Lengkap">
           <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Contoh: Fauzia Khaerani" placeholderTextColor="#B08D8F" />
         </FieldGroup>
@@ -214,9 +233,9 @@ export default function AdminStudentFormScreen() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={isSubmitting}>
           <Text style={styles.submitButtonText}>
-            {isEditMode ? 'Simpan Perubahan' : 'Tambah & Buatkan Akun'}
+            {isSubmitting ? 'Memproses...' : isEditMode ? 'Simpan Perubahan' : 'Tambah & Buatkan Akun'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -290,8 +309,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   submitButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 },
-
-  // Success screen (kredensial hasil generate)
   successWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   successIconCircle: {
     width: 70,

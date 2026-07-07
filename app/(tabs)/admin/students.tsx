@@ -3,14 +3,13 @@ import { ChevronLeft, GraduationCap, Plus, Search, SlidersHorizontal } from 'luc
 import React, { useState } from 'react';
 import {
   FlatList,
-  Image,
-  SafeAreaView,
   StatusBar as RNStatusBar,
+  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { useExam } from '../../context/ExamContext';
 
@@ -220,8 +219,8 @@ const styles = StyleSheet.create({
   badgeTextProdi: { fontSize: 10, color: '#FFFFFF', fontWeight: '600' },
   addButton: {
     position: 'absolute',
-    right: 4,
-    bottom: 20,
+    right: 30,
+    bottom: 50,
     width: 56,
     height: 56,
     borderRadius: 28,

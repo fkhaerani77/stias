@@ -1,4 +1,7 @@
+import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useState } from 'react';
+import { db, secondaryAuth } from '../config/firebase';
 
 // ============================================================
 // TIPE DATA
@@ -91,13 +94,12 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
 
   const deleteQuestion = (questionId: number) => {
     setQuestionBank((prev) => prev.filter((q) => q.id !== questionId));
-    // Bersihkan referensi soal ini dari semua kategori yang memakainya
     setCategories((prev) =>
       prev.map((c) => ({ ...c, questionIds: c.questionIds.filter((id) => id !== questionId) }))
     );
   };
 
-  // --- Kategori Ujian (metadata: judul, jadwal, durasi, + daftar id soal yang dipakai) ---
+  // --- Kategori Ujian ---
   const [categories, setCategories] = useState<ExamCategory[]>([DEFAULT_CATEGORY]);
 
   const addCategory = (category: Omit<ExamCategory, 'id' | 'questionIds'>) => {
@@ -114,7 +116,6 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
     setCategories((prev) => prev.filter((c) => c.id !== categoryId));
   };
 
-  // Tambah / lepas satu soal dari kategori tertentu (assign dari Question Bank)
   const toggleQuestionInCategory = (categoryId: string, questionId: number) => {
     setCategories((prev) =>
       prev.map((c) => {
@@ -130,7 +131,6 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
     );
   };
 
-  // Helper: ambil objek soal lengkap untuk sebuah kategori (dipakai layar exam mahasiswa)
   const getQuestionsForCategory = (categoryId: string): ExamQuestion[] => {
     const category = categories.find((c) => c.id === categoryId);
     if (!category) return [];
@@ -139,28 +139,52 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
       .filter(Boolean) as ExamQuestion[];
   };
 
-  // --- Data Mahasiswa (dummy, CRUD oleh Admin) ---
+  // --- Data Mahasiswa (CRUD oleh Admin, sekarang terhubung ke Firebase Auth + Firestore) ---
   const [students, setStudents] = useState<StudentAccount[]>(DEFAULT_STUDENTS);
 
-  // Generate password acak 6 digit angka — dipakai saat akun baru dibuat / direset
+  // Generate password acak 6 digit angka
   const generatePassword = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-  const addStudent = (student: Omit<StudentAccount, 'id' | 'username' | 'password'>) => {
+  // Sekarang ASYNC — bikin akun sungguhan di Firebase Auth + simpan role ke Firestore
+  const addStudent = async (student: Omit<StudentAccount, 'id' | 'username' | 'password'>) => {
     const generatedPassword = generatePassword();
+    const email = `${student.nim}@student.stias.app`; // email sintetis dari NIM
+
+    // 1. Buat akun di Firebase Auth pakai secondary app, biar sesi admin tidak ikut ke-logout
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, generatedPassword);
+    const uid = userCredential.user.uid;
+
+    // 2. Simpan role + profil ke Firestore — dipakai login.tsx untuk menentukan dashboard
+    await setDoc(doc(db, 'users', uid), {
+      role: 'mahasiswa',
+      name: student.name,
+      nim: student.nim,
+      kelas: student.kelas,
+      prodi: student.prodi,
+      tahun: student.tahun,
+      status: student.status,
+    });
+
+    // 3. Sign out dari secondary auth (bukan sesi admin, jadi aman)
+    await signOut(secondaryAuth);
+
+    // 4. Simpan ke state lokal juga, biar langsung tampil di list admin
     const newStudent: StudentAccount = {
       ...student,
-      id: `std-${Date.now()}`,
-      username: student.nim,       // Username = NIM, gampang diingat
-      password: generatedPassword, // Password acak, ditampilkan sekali ke admin
+      id: uid, // pakai uid Auth sebagai id, konsisten dengan Firestore
+      username: student.nim,
+      password: generatedPassword,
     };
     setStudents((prev) => [...prev, newStudent]);
-    return newStudent; // Dikembalikan supaya form bisa nampilin kredensial ke admin
+    return newStudent;
   };
 
   const resetStudentPassword = (studentId: string) => {
     const newPassword = generatePassword();
     setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, password: newPassword } : s)));
     return newPassword;
+    // Catatan: ini BELUM mengubah password sungguhan di Firebase Auth.
+    // Untuk reset password akun mahasiswa lain secara aman, butuh Cloud Function + Admin SDK (dibahas terpisah nanti).
   };
 
   const updateStudent = (studentId: string, updates: Partial<StudentAccount>) => {
@@ -169,6 +193,7 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
 
   const deleteStudent = (studentId: string) => {
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    // Catatan: ini belum menghapus akun Auth / dokumen Firestore user tersebut.
   };
 
   return (

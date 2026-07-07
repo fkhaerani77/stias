@@ -103,7 +103,7 @@ export default function AdminDashboardScreen() {
             <Text style={styles.menuDesc}>Manage exam questions</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuBox} onPress={() => router.push('/admin/categories' as any)}>
+          <TouchableOpacity style={styles.menuBox} onPress={() => router.push('/admin/questions-category' as any)}>
             <View style={styles.menuHeaderRow}>
               <ClipboardList color="#FFFFFF" size={24} />
               <Text style={styles.menuTitle}>Questions Category</Text>

@@ -1,17 +1,19 @@
 import { useRouter } from 'expo-router';
-import { Camera, ChevronLeft, Pencil, Save } from 'lucide-react-native';
+import { signOut } from 'firebase/auth';
+import { Camera, ChevronLeft, LogOut, Pencil, Save } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Image,
-    StatusBar as RNStatusBar,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  StatusBar as RNStatusBar,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { auth } from '../../config/firebase'; // sesuaikan path relatif ke lokasi firebase.ts
 
 // Data profil dosen — dummy, belum tersambung ke backend
 const INITIAL_PROFILE = {
@@ -29,7 +31,7 @@ export default function AdminProfileScreen() {
   const [draft, setDraft] = useState(INITIAL_PROFILE);
 
   const startEditing = () => {
-    setDraft(profile); // mulai edit dari data terakhir yang tersimpan
+    setDraft(profile);
     setIsEditing(true);
   };
 
@@ -50,6 +52,24 @@ export default function AdminProfileScreen() {
 
   const updateField = (field: keyof typeof draft, value: string) => {
     setDraft((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Yakin ingin keluar dari akun ini?', [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut(auth);
+            router.replace('/login');
+          } catch (error: any) {
+            Alert.alert('Gagal Logout', error.message);
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -122,7 +142,7 @@ export default function AdminProfileScreen() {
           />
         </View>
 
-        {isEditing && (
+        {isEditing ? (
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
               <Text style={styles.cancelText}>Batal</Text>
@@ -132,13 +152,17 @@ export default function AdminProfileScreen() {
               <Text style={styles.saveText}>Simpan</Text>
             </TouchableOpacity>
           </View>
+        ) : (
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <LogOut color="#FF4444" size={18} />
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
         )}
       </View>
     </SafeAreaView>
   );
 }
 
-// Baris field — mode lihat (Text biasa) vs mode edit (TextInput)
 function FieldRow({
   label,
   value,
@@ -242,4 +266,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+  logoutButton: {
+    flexDirection: 'row',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#FF4444',
+    borderRadius: 14,
+    paddingVertical: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  logoutText: { color: '#FF4444', fontWeight: 'bold', fontSize: 14 },
 });
