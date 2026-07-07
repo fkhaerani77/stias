@@ -12,36 +12,39 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { useExam } from './context/ExamContext';
+
+// Kredensial dummy khusus admin — mahasiswa dicek dari data akun yang di-generate admin
+const ADMIN_CREDENTIALS = { username: 'admin', password: 'admin123' };
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { students } = useExam();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
 
   const handleLogin = () => {
-    // DATA DUMMY UNTUK LOGIN
-    const dummyUsername = 'admin';
-    const dummyPassword = '123';
-
     // Validasi apakah input kosong
     if (!username || !password) {
       Alert.alert('Gagal Login', 'Username dan Password tidak boleh kosong!');
       return;
     }
 
-    // Cari baris ini di app/login.tsx kamu dan ubah jalurnya:
-    if (username === dummyUsername && password === dummyPassword) {
-    Alert.alert('Sukses', 'Login Berhasil!', [
-        {
-        text: 'OK',
-        onPress: () => {
-        // Langsung tembak ke index di dalam folder mahasiswa
-        router.replace('/mahasiswa' as any);
-      }
-        }
-    ]);
-} else {
+    // 1. Cek dulu apakah ini akun admin
+    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+      router.replace('/admin' as any);
+      return;
+    }
+
+    // 2. Kalau bukan admin, cek ke daftar akun mahasiswa yang di-generate admin
+    const matchedStudent = (students || []).find(
+      (s: any) => s.username === username && s.password === password
+    );
+
+    if (matchedStudent) {
+      router.replace('/mahasiswa' as any);
+    } else {
       Alert.alert('Gagal Login', 'Username atau Password salah. Coba lagi!');
     }
   };
@@ -52,7 +55,6 @@ export default function LoginScreen() {
       
       <View style={styles.contentContainer}>
         {/* Gambar Ilustrasi Wisuda */}
-        {/* Pastikan kamu taruh file gambarnya di assets/graduation-img.png */}
         <View style={styles.imageContainer}>
           <Image 
             source={require('../assets/images/graduation1.png')} 
@@ -156,8 +158,8 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F7', // Latar input abu-abu sangat muda sesuai gambar
-    borderRadius: 25, // Membuat sudut melengkung sempurna berbentuk kapsul
+    backgroundColor: '#F5F5F7',
+    borderRadius: 25,
     paddingHorizontal: 16,
     height: 54,
     marginBottom: 16,
@@ -174,7 +176,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   loginButton: {
-    backgroundColor: '#61141A', // Warna marun senada dengan tema STIAS
+    backgroundColor: '#61141A',
     borderRadius: 25,
     height: 54,
     justifyContent: 'center',
@@ -184,7 +186,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 5,
-    elevation: 3, // Shadow untuk Android
+    elevation: 3,
   },
   loginButtonText: {
     color: '#FFFFFF',
