@@ -3,6 +3,7 @@ import { Award, Bell, ClipboardList, ShieldAlert, Sparkles } from 'lucide-react-
 import React, { useEffect, useState } from 'react';
 import {
   Image,
+  Modal,
   Platform,
   StatusBar as RNStatusBar,
   SafeAreaView,
@@ -12,35 +13,37 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useExam } from '../../context/ExamContext';
 
 export default function DashboardScreen() {
-  const router = useRouter(); 
-  
+  const router = useRouter();
+  const { getNotifications } = useExam();
+
   const [currentDate, setCurrentDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
   const [greeting, setGreeting] = useState('Good Morning');
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const notifications = getNotifications();
 
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
 
-      // 1. Format Tanggal otomatis
-      const options: Intl.DateTimeFormatOptions = { 
-        weekday: 'long', 
-        day: '2-digit', 
-        month: 'long', 
-        year: 'numeric' 
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
       };
-      const dateString = now.toLocaleDateString('en-US', options); 
+      const dateString = now.toLocaleDateString('en-US', options);
       setCurrentDate(dateString);
 
-      // 2. Format Waktu otomatis
       const currentHour = now.getHours();
       const hours = String(currentHour).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       setCurrentTime(`${hours}:${minutes} WIB`);
 
-      // 3. Logika Penyesuaian Ucapan Selamat otomatis
       if (currentHour >= 5 && currentHour < 12) {
         setGreeting('Good Morning');
       } else if (currentHour >= 12 && currentHour < 17) {
@@ -58,53 +61,47 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />      
-      
-      {/* 1. Header (Profil & Notifikasi) */}
+      <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push('/mahasiswa/profile' as any)}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60' }} 
+          <Image
+            source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60' }}
             style={styles.profileImage}
           />
         </TouchableOpacity>
-        
+
         <Text style={styles.headerTitle}>Dashboard</Text>
-        
-        <TouchableOpacity style={styles.notificationButton}>
+
+        <TouchableOpacity style={styles.notificationButton} onPress={() => setShowNotifications(true)}>
           <Bell color="#61141A" size={24} />
+          {notifications.length > 0 && <View style={styles.notifBadge} />}
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
-        {/* 2. Welcome Greetings (Dinamis) */}
+
         <View style={styles.welcomeContainer}>
           <Text style={styles.greetingText}>Hi, Fauzia!</Text>
           <Text style={styles.subGreetingText}>{greeting}</Text>
         </View>
 
-        {/* 3. Info Tanggal & Waktu (Dinamis) */}
         <View style={styles.dateTimeContainer}>
           <Text style={styles.dateText}>{currentDate}</Text>
           <Text style={styles.timeText}>{currentTime}</Text>
         </View>
 
-        {/* 4. Banner Welcome Card */}
         <View style={styles.bannerCard}>
           <Text style={styles.bannerTitle}>Welcome!</Text>
           <Text style={styles.bannerSubtitle}>It's Time to Prove Your Competence</Text>
         </View>
 
-        {/* 5. Section "All Services" */}
         <Text style={styles.sectionTitle}>All Services</Text>
 
-        {/* Grid Menu Senada (Menggunakan Tema Warna Marun Konsisten) */}
         <View style={styles.gridContainer}>
-          {/* Menu 1: Exam (DI SINI PERUBAHANNYA) */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.menuBox}
-            onPress={() => router.push('/mahasiswa/exam-info' as any)}
+            onPress={() => router.push('/mahasiswa/exam-list' as any)}
           >
             <View style={styles.menuHeaderRow}>
               <ClipboardList color="#FFFFFF" size={24} />
@@ -113,7 +110,6 @@ export default function DashboardScreen() {
             <Text style={styles.menuDesc}>Start Assessment</Text>
           </TouchableOpacity>
 
-          {/* Menu 2: Score */}
           <TouchableOpacity
             style={styles.menuBox}
             onPress={() => router.push('/mahasiswa/score' as any)}
@@ -125,7 +121,6 @@ export default function DashboardScreen() {
             <Text style={styles.menuDesc}>Review your performance</Text>
           </TouchableOpacity>
 
-          {/* Menu 4: Certificate */}
           <TouchableOpacity
             style={styles.menuBox}
             onPress={() => router.push('/mahasiswa/certificate' as any)}
@@ -136,7 +131,7 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.menuDesc}>View and download your certificates</Text>
           </TouchableOpacity>
-          {/* Menu 4: Integrity Report */}
+
           <TouchableOpacity
             style={styles.menuBox}
             onPress={() => router.push('/mahasiswa/violations' as any)}
@@ -149,17 +144,45 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 6. Footer */}
         <View style={styles.footerContainer}>
           <Text style={styles.footerSlogan}>One Step Closer to Success!</Text>
-          <Image 
-            source={require('../../../assets/images/graduation1.png')} 
+          <Image
+            source={require('../../../assets/images/graduation1.png')}
             style={styles.footerIllustration}
             resizeMode="contain"
           />
         </View>
 
       </ScrollView>
+
+      <Modal animationType="slide" transparent visible={showNotifications} onRequestClose={() => setShowNotifications(false)}>
+        <View style={styles.notifOverlay}>
+          <View style={styles.notifSheet}>
+            <View style={styles.notifHeader}>
+              <Text style={styles.notifTitle}>Notifikasi</Text>
+              <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                <Text style={styles.notifClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+              {notifications.length === 0 ? (
+                <Text style={styles.notifEmpty}>Belum ada notifikasi.</Text>
+              ) : (
+                notifications.map((n: any) => (
+                  <View key={n.id} style={styles.notifItem}>
+                    <View style={[styles.notifDot, { backgroundColor: n.type === 'reminder' ? '#FFD700' : '#00E676' }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.notifItemTitle}>{n.title}</Text>
+                      <Text style={styles.notifItemMessage}>{n.message}</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -194,6 +217,15 @@ const styles = StyleSheet.create({
   },
   notificationButton: {
     padding: 4,
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF4444',
   },
   welcomeContainer: {
     marginTop: 16,
@@ -254,7 +286,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   menuBox: {
-    width: '47%', 
+    width: '47%',
     backgroundColor: '#61141A',
     borderRadius: 20,
     padding: 16,
@@ -282,35 +314,6 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     opacity: 0.85,
   },
-  longMenuBox: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#61141A',
-    borderRadius: 20,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-    marginBottom: 32,
-  },
-  longMenuLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  longMenuTextContainer: {
-    marginLeft: 12,
-  },
-  longMenuTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#61141A',
-  },
-  longMenuDesc: {
-    fontSize: 12,
-    color: '#7A2229',
-    marginTop: 2,
-  },
   footerContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -332,4 +335,14 @@ const styles = StyleSheet.create({
     right: -24,
     bottom: -40,
   },
+  notifOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  notifSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '70%' },
+  notifHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  notifTitle: { fontSize: 18, fontWeight: 'bold', color: '#61141A' },
+  notifClose: { fontSize: 18, fontWeight: 'bold', color: '#61141A' },
+  notifEmpty: { textAlign: 'center', color: '#9A9A9A', paddingVertical: 30 },
+  notifItem: { flexDirection: 'row', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3EFEF' },
+  notifDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  notifItemTitle: { fontSize: 14, fontWeight: 'bold', color: '#61141A', marginBottom: 2 },
+  notifItemMessage: { fontSize: 12, color: '#9A9A9A' },
 });

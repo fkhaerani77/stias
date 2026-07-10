@@ -1,7 +1,8 @@
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { db, secondaryAuth } from '../config/firebase';
+import { scheduleExamReminder, cancelReminder, sendExamResultNotification } from './../utils/notifications';
 
 // ============================================================
 // TIPE DATA
@@ -17,9 +18,10 @@ export interface ExamQuestion {
 export interface ExamCategory {
   id: string;
   title: string;
-  schedule: string;     // contoh: "12 Jun 2026 • 09:00 WIB"
-  duration: number;     // dalam menit
-  questionIds: number[]; // referensi ke ExamQuestion.id di questionBank
+  schedule: string;
+  scheduleTimestamp?: number; // epoch ms, dipakai untuk hitung reminder
+  duration: number;
+  questionIds: number[];
 }
 
 export interface StudentAccount {
@@ -35,7 +37,7 @@ export interface StudentAccount {
 }
 
 // ============================================================
-// DATA AWAL (seed) — supaya app tetap jalan seperti sebelumnya
+// DATA AWAL (seed)
 // ============================================================
 
 const DEFAULT_QUESTION_BANK: ExamQuestion[] = [
@@ -50,8 +52,9 @@ const DEFAULT_CATEGORY: ExamCategory = {
   id: 'cat-1',
   title: 'National Competency Test',
   schedule: '12 Jun 2026 • 09:00 WIB',
+  scheduleTimestamp: Date.now() + 16 * 60 * 1000, // TESTING: 16 menit dari sekarang, biar reminder H-15 langsung kena
   duration: 90,
-  questionIds: [1, 2, 3, 4, 5], // pakai semua soal dummy di atas
+  questionIds: [1, 2, 3, 4, 5],
 };
 
 const DEFAULT_STUDENTS: StudentAccount[] = [
@@ -67,19 +70,18 @@ const DEFAULT_STUDENTS: StudentAccount[] = [
 const ExamContext = createContext<any>(null);
 
 export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
-  // --- History hasil ujian (mahasiswa) ---
   const [history, setHistory] = useState<any[]>([]);
   const addHistory = (examData: any) => {
     setHistory((prev) => [examData, ...prev]);
+    // Kirim notifikasi OS instan begitu hasil ujian keluar
+    sendExamResultNotification(examData.title, examData.status, examData.score, examData.categoryId);
   };
 
-  // --- Pelanggaran (Integrity Report) ---
   const [violations, setViolations] = useState<any[]>([]);
   const addViolation = (violationData: any) => {
     setViolations((prev) => [violationData, ...prev]);
   };
 
-  // --- Question Bank (global, dikelola Admin, lepas dari kategori) ---
   const [questionBank, setQuestionBank] = useState<ExamQuestion[]>(DEFAULT_QUESTION_BANK);
 
   const addQuestion = (question: Omit<ExamQuestion, 'id'>) => {
@@ -99,7 +101,6 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
     );
   };
 
-  // --- Kategori Ujian ---
   const [categories, setCategories] = useState<ExamCategory[]>([DEFAULT_CATEGORY]);
 
   const addCategory = (category: Omit<ExamCategory, 'id' | 'questionIds'>) => {
@@ -139,22 +140,85 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
       .filter(Boolean) as ExamQuestion[];
   };
 
-  // --- Data Mahasiswa (CRUD oleh Admin, sekarang terhubung ke Firebase Auth + Firestore) ---
+  // --- Jadwalkan notifikasi OS asli (expo-notifications) tiap kali daftar kategori/history berubah ---
+  // Set ini nyimpen kombinasi "id kategori + jadwalnya" yang SUDAH pernah dijadwalkan,
+  // supaya tidak menjadwalkan ulang notifikasi yang sama berkali-kali tiap re-render.
+  const scheduledRemindersRef = useRef<Set<string>>(new Set());
+  // Map ini nyimpen notificationId hasil schedule per kategori, dipakai untuk cancel
+  // kalau ternyata mahasiswa sudah mengerjakan ujian sebelum waktu reminder-nya kesampaian.
+  const scheduledNotificationIdsRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    categories.forEach((cat) => {
+      if (!cat.scheduleTimestamp) return; // belum ada jadwal pasti, skip
+
+      const alreadyDone = history.some((h: any) => h.categoryId === cat.id);
+
+      if (alreadyDone) {
+        // Ujian ini sudah dikerjakan — kalau masih ada reminder yang ke-schedule, batalkan
+        const existingId = scheduledNotificationIdsRef.current[cat.id];
+        if (existingId) {
+          cancelReminder(existingId);
+          delete scheduledNotificationIdsRef.current[cat.id];
+        }
+        return;
+      }
+
+      const reminderKey = `${cat.id}-${cat.scheduleTimestamp}`;
+      if (scheduledRemindersRef.current.has(reminderKey)) return; // sudah pernah dijadwalkan
+
+      scheduleExamReminder(cat.title, new Date(cat.scheduleTimestamp), cat.id).then((notificationId) => {
+        if (notificationId) {
+          scheduledNotificationIdsRef.current[cat.id] = notificationId;
+        }
+      });
+      scheduledRemindersRef.current.add(reminderKey);
+    });
+  }, [categories, history]);
+
+  // --- Notifikasi mahasiswa: reminder jadwal ujian + hasil ujian ---
+  const getNotifications = () => {
+    const notifications: any[] = [];
+    const now = Date.now();
+    const in48h = now + 48 * 60 * 60 * 1000;
+
+    categories.forEach((cat) => {
+      const alreadyDone = history.some((h: any) => h.categoryId === cat.id);
+      if (!alreadyDone && cat.scheduleTimestamp && cat.scheduleTimestamp > now && cat.scheduleTimestamp <= in48h) {
+        notifications.push({
+          id: `reminder-${cat.id}`,
+          type: 'reminder',
+          title: 'Ujian Akan Dimulai',
+          message: `${cat.title} dijadwalkan ${cat.schedule}`,
+          timestamp: cat.scheduleTimestamp,
+        });
+      }
+    });
+
+    history.forEach((h: any) => {
+      notifications.push({
+        id: `result-${h.id}`,
+        type: 'result',
+        title: h.status === 'Passed' ? 'Selamat, Kamu Lulus!' : 'Hasil Ujian Keluar',
+        message: `${h.title}: Skor ${h.score}%`,
+        timestamp: h.id,
+      });
+    });
+
+    return notifications.sort((a, b) => b.timestamp - a.timestamp);
+  };
+
   const [students, setStudents] = useState<StudentAccount[]>(DEFAULT_STUDENTS);
 
-  // Generate password acak 6 digit angka
   const generatePassword = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-  // Sekarang ASYNC — bikin akun sungguhan di Firebase Auth + simpan role ke Firestore
   const addStudent = async (student: Omit<StudentAccount, 'id' | 'username' | 'password'>) => {
     const generatedPassword = generatePassword();
-    const email = `${student.nim}@student.stias.app`; // email sintetis dari NIM
+    const email = `${student.nim}@student.stias.app`;
 
-    // 1. Buat akun di Firebase Auth pakai secondary app, biar sesi admin tidak ikut ke-logout
     const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, generatedPassword);
     const uid = userCredential.user.uid;
 
-    // 2. Simpan role + profil ke Firestore — dipakai login.tsx untuk menentukan dashboard
     await setDoc(doc(db, 'users', uid), {
       role: 'mahasiswa',
       name: student.name,
@@ -165,13 +229,11 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
       status: student.status,
     });
 
-    // 3. Sign out dari secondary auth (bukan sesi admin, jadi aman)
     await signOut(secondaryAuth);
 
-    // 4. Simpan ke state lokal juga, biar langsung tampil di list admin
     const newStudent: StudentAccount = {
       ...student,
-      id: uid, // pakai uid Auth sebagai id, konsisten dengan Firestore
+      id: uid,
       username: student.nim,
       password: generatedPassword,
     };
@@ -183,8 +245,6 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
     const newPassword = generatePassword();
     setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, password: newPassword } : s)));
     return newPassword;
-    // Catatan: ini BELUM mengubah password sungguhan di Firebase Auth.
-    // Untuk reset password akun mahasiswa lain secara aman, butuh Cloud Function + Admin SDK (dibahas terpisah nanti).
   };
 
   const updateStudent = (studentId: string, updates: Partial<StudentAccount>) => {
@@ -193,7 +253,6 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
 
   const deleteStudent = (studentId: string) => {
     setStudents((prev) => prev.filter((s) => s.id !== studentId));
-    // Catatan: ini belum menghapus akun Auth / dokumen Firestore user tersebut.
   };
 
   return (
@@ -213,6 +272,7 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
         deleteCategory,
         toggleQuestionInCategory,
         getQuestionsForCategory,
+        getNotifications,
         students,
         addStudent,
         updateStudent,

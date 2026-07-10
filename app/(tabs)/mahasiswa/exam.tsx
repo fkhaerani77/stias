@@ -1,4 +1,4 @@
-import { useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { AlertTriangle, CheckCircle, LayoutGrid, Timer } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -15,67 +15,50 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-// Tambahkan import context
+import { useAuth } from '../../context/AuthContext';
 import { useExam } from '../../context/ExamContext';
-
-// --- Tipe Data & Data Dummy tetap sama ---
-interface Question {
-    id: number;
-    number: number;
-    text: string;
-    options: { key: string; text: string }[];
-    correctAnswer: string; // Kunci jawaban benar
-}
-
-const DUMMY_QUESTIONS: Question[] = [
-    { id: 1, number: 1, text: "What does the 'P' stand for in the HTTP protocol name?", options: [{ key: 'A', text: 'Program' }, { key: 'B', text: 'Protocol' }, { key: 'C', text: 'Private' }, { key: 'D', text: 'Process' }], correctAnswer: 'B' },
-    { id: 2, number: 2, text: "Which network protocol is primarily used for real-time audio and video streaming over IP networks?", options: [{ key: 'A', text: 'HTTP' }, { key: 'B', text: 'FTP' }, { key: 'C', text: 'RTP' }, { key: 'D', text: 'SMTP' }], correctAnswer: 'C' },
-    { id: 3, number: 3, text: "What is the primary function of the Domain Name System (DNS)?", options: [{ key: 'A', text: 'Encrypting network packets' }, { key: 'B', text: 'Assigning dynamic IP addresses' }, { key: 'C', text: 'Translating human-readable domain names to IP addresses' }, { key: 'D', text: 'Filtering malicious traffic' }], correctAnswer: 'C' },
-    { id: 4, number: 4, text: "Which layer of the OSI model handles hardware addressing and media access control?", options: [{ key: 'A', text: 'Physical Layer' }, { key: 'B', text: 'Data Link Layer' }, { key: 'C', text: 'Network Layer' }, { key: 'D', text: 'Transport Layer' }], correctAnswer: 'B' },
-    { id: 5, number: 5, text: "What is the standard port number used for secure web browsing via HTTPS?", options: [{ key: 'A', text: '80' }, { key: 'B', text: '21' }, { key: 'C', text: '443' }, { key: 'D', text: '25' }], correctAnswer: 'C' }
-];
 
 export default function ExamScreen() {
     const router = useRouter();
     const navigation = useNavigation();
-    const { addHistory, addViolation } = useExam(); // Panggil hook context
+    const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
+    const { addHistory, addViolation, categories, getQuestionsForCategory } = useExam();
+    const { profile } = useAuth();
+    const category = categories.find((c: any) => c.id === categoryId);
+    // Soal sungguhan dari kategori ini — bukan DUMMY_QUESTIONS lagi
+    const QUESTIONS = category ? getQuestionsForCategory(category.id) : [];
 
     const [isListModalVisible, setIsListModalVisible] = useState(false);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
     const [answers, setAnswers] = useState<Record<number, string>>({});
-    const [secondsLeft, setSecondsLeft] = useState<number>(5400);
+    const [secondsLeft, setSecondsLeft] = useState<number>((category?.duration || 90) * 60);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [isSuccessModalVisible, setIsSuccessModalVisible] = useState(false);
-    // Catat waktu mulai ujian sekali saat komponen pertama kali dirender
     const [startTime] = useState<Date>(() => new Date());
-    // Penanda apakah ujian sudah selesai (submit) — dipakai untuk mengizinkan keluar layar
     const examFinishedRef = useRef(false);
 
-    // Helper untuk mencatat pelanggaran dengan format konsisten
     const logViolation = (type: string) => {
         addViolation({
             id: Date.now() + Math.random(),
-            examTitle: 'National Competency Test',
+            examTitle: category?.title || 'Unknown Exam',
             type,
             timestamp: new Date().toLocaleString('id-ID'),
         });
     };
 
-    // 1. Blok tombol back fisik (Android)
     useEffect(() => {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-            if (examFinishedRef.current) return false; // Izinkan setelah ujian selesai
+            if (examFinishedRef.current) return false;
             logViolation('Menekan Tombol Back');
             Alert.alert('Tidak Diizinkan', 'Anda tidak dapat keluar dari ujian sebelum submit.');
-            return true; // true = mencegah aksi back default
+            return true;
         });
         return () => backHandler.remove();
     }, []);
 
-    // 2. Blok navigasi keluar layar (swipe-back, back programatis, dsb)
     useEffect(() => {
         const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-            if (examFinishedRef.current) return; // Izinkan setelah ujian selesai
+            if (examFinishedRef.current) return;
             e.preventDefault();
             logViolation('Mencoba Meninggalkan Layar Ujian');
             Alert.alert('Tidak Diizinkan', 'Anda tidak dapat meninggalkan layar ujian sebelum submit.');
@@ -83,7 +66,6 @@ export default function ExamScreen() {
         return unsubscribe;
     }, [navigation]);
 
-    // 3. Deteksi aplikasi diminimize / pindah ke app lain / layar dikunci
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextState) => {
             if (examFinishedRef.current) return;
@@ -100,56 +82,69 @@ export default function ExamScreen() {
         return () => clearInterval(timerInterval);
     }, [secondsLeft]);
 
-    // Helper untuk format jam:menit, contoh "09:15 WIB"
     const formatClock = (date: Date) => {
         const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
         return `${hours}:${minutes} WIB`;
     };
 
-    // Tambahkan fungsi ini untuk menyimpan data saat submit
     const handleSubmitExam = () => {
-    // Hitung jumlah jawaban benar dengan mencocokkan userAnswers ke correctAnswer tiap soal
-    const totalQuestions = DUMMY_QUESTIONS.length;
-    const correctCount = DUMMY_QUESTIONS.filter(
-        (q) => answers[q.id] === q.correctAnswer
-    ).length;
-    const scorePercentage = Math.round((correctCount / totalQuestions) * 100);
-    const PASSING_SCORE = 60; // Ambang batas kelulusan, bisa disesuaikan
+        const totalQuestions = QUESTIONS.length;
+        const correctCount = QUESTIONS.filter(
+            (q: any) => answers[q.id] === q.correctAnswer
+        ).length;
+        const scorePercentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+        const PASSING_SCORE = 60;
 
-    // Catat waktu selesai & hitung durasi pengerjaan yang sebenarnya
-    const finishedTime = new Date();
-    const elapsedMs = finishedTime.getTime() - startTime.getTime();
-    const elapsedMinutes = Math.max(1, Math.round(elapsedMs / 60000));
+        const finishedTime = new Date();
+        const elapsedMs = finishedTime.getTime() - startTime.getTime();
+        const elapsedMinutes = Math.max(1, Math.round(elapsedMs / 60000));
 
-    addHistory({
-        id: Date.now(),
-        title: "National Competency Test",
-        date: new Date().toLocaleDateString(),
-        status: scorePercentage >= PASSING_SCORE ? 'Passed' : 'Failed',
-        startTime: formatClock(startTime),       // Waktu mulai ujian
-        finishedTime: formatClock(finishedTime), // Waktu selesai ujian
-        duration: `${elapsedMinutes} mins`,      // Durasi asli pengerjaan
-        userAnswers: answers,
-        questions: DUMMY_QUESTIONS,
-        score: scorePercentage,       // Skor dalam persen, misal 80
-        correctCount,                 // Jumlah jawaban benar
-        totalQuestions                // Total soal
-    });
-    examFinishedRef.current = true; // Ujian selesai, izinkan navigasi keluar
-    setIsModalVisible(false);
-    setIsSuccessModalVisible(true);
-};
+        addHistory({
+            id: Date.now(),
+            categoryId: category?.id,          // penting: dipakai buat cek "sudah pernah dikerjakan" & filter admin nanti
+            title: category?.title || 'Unknown Exam',
+            date: new Date().toLocaleDateString(),
+            status: scorePercentage >= PASSING_SCORE ? 'Passed' : 'Failed',
+            startTime: formatClock(startTime),
+            finishedTime: formatClock(finishedTime),
+            duration: `${elapsedMinutes} mins`,
+            userAnswers: answers,
+            questions: QUESTIONS,
+            score: scorePercentage,
+            correctCount,
+            totalQuestions
+        });
+        examFinishedRef.current = true;
+        setIsModalVisible(false);
+        setIsSuccessModalVisible(true);
+    };
 
     const formatTime = (totalSeconds: number) => {
         const pad = (n: number) => String(n).padStart(2, '0');
         return `${pad(Math.floor(totalSeconds / 3600))} : ${pad(Math.floor((totalSeconds % 3600) / 60))} : ${pad(totalSeconds % 60)}`;
     };
 
-    const currentQuestion = DUMMY_QUESTIONS[currentQuestionIndex];
-    const isAllAnswered = Object.keys(answers).length === DUMMY_QUESTIONS.length;
-    const isLastQuestion = currentQuestionIndex === DUMMY_QUESTIONS.length - 1;
-    const progressPercentage = Math.round(((currentQuestionIndex + 1) / DUMMY_QUESTIONS.length) * 100);
+    // Guard: kalau kategori tidak ditemukan atau tidak ada soal, jangan render layar ujian
+    if (!category || QUESTIONS.length === 0) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+                    <Text style={{ color: '#61141A', textAlign: 'center', marginBottom: 16 }}>
+                        Ujian tidak tersedia atau belum ada soal untuk kategori ini.
+                    </Text>
+                    <TouchableOpacity onPress={() => router.back()}>
+                        <Text style={{ color: '#61141A', fontWeight: 'bold' }}>Kembali</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const currentQuestion = QUESTIONS[currentQuestionIndex];
+    const isAllAnswered = Object.keys(answers).length === QUESTIONS.length;
+    const isLastQuestion = currentQuestionIndex === QUESTIONS.length - 1;
+    const progressPercentage = Math.round(((currentQuestionIndex + 1) / QUESTIONS.length) * 100);
 
     const handleNextOrSubmit = () => {
         if (isLastQuestion) setIsModalVisible(true);
@@ -164,7 +159,6 @@ export default function ExamScreen() {
         setAnswers({ ...answers, [currentQuestion.id]: key });
     };
 
-    // Pindah ke soal tertentu lewat Question List, lalu tutup modal
     const handleJumpToQuestion = (index: number) => {
         setCurrentQuestionIndex(index);
         setIsListModalVisible(false);
@@ -174,15 +168,14 @@ export default function ExamScreen() {
         <SafeAreaView style={styles.container}>
             <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
 
-            {/* Header */}
             <View style={styles.header}>
                 <View style={styles.profileSection}>
-                    <Image source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60' }} style={styles.profileImage} />
-                    <View style={styles.profileTextContainer}>
-                        <Text style={styles.profileName}>Fauzia</Text>
-                        <Text style={styles.profileNim}>14523012</Text>
-                    </View>
+                <Image source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60' }} style={styles.profileImage} />
+                <View style={styles.profileTextContainer}>
+                    <Text style={styles.profileName}>{profile?.name || 'Mahasiswa'}</Text>
+                    <Text style={styles.profileNim}>{profile?.nim || ''}</Text>
                 </View>
+            </View>
                 <TouchableOpacity style={styles.questionListButton} onPress={() => setIsListModalVisible(true)}>
                     <Text style={styles.questionListText}>Question List</Text>
                     <LayoutGrid color="#61141A" size={24} />
@@ -191,8 +184,8 @@ export default function ExamScreen() {
 
             <View style={styles.mainContent}>
                 <View style={styles.examProgressCard}>
-                    <Text style={styles.examTitle}>National Competency Test</Text>
-                    <Text style={styles.questionCountText}>Questions {currentQuestionIndex + 1} of {DUMMY_QUESTIONS.length}</Text>
+                    <Text style={styles.examTitle}>{category.title}</Text>
+                    <Text style={styles.questionCountText}>Questions {currentQuestionIndex + 1} of {QUESTIONS.length}</Text>
                     <View style={styles.timerRow}>
                         <Timer color="#FFFFFF" size={20} />
                         <Text style={styles.timerText}>{formatTime(secondsLeft)}</Text>
@@ -204,9 +197,9 @@ export default function ExamScreen() {
                 </View>
 
                 <View style={styles.questionCard}>
-                    <Text style={styles.questionNumberTitle}>Question {currentQuestion.number}</Text>
+                    <Text style={styles.questionNumberTitle}>Question {currentQuestionIndex + 1}</Text>
                     <Text style={styles.questionText}>{currentQuestion.text}</Text>
-                    {currentQuestion.options.map((opt) => {
+                    {currentQuestion.options.map((opt: any) => {
                         const isSelected = answers[currentQuestion.id] === opt.key;
                         return (
                             <TouchableOpacity key={opt.key} style={[styles.optionBox, isSelected && styles.optionBoxSelected]} onPress={() => handleSelectAnswer(opt.key)}>
@@ -232,7 +225,6 @@ export default function ExamScreen() {
                 </View>
             </View>
 
-            {/* Modal Konfirmasi */}
             <Modal animationType="fade" transparent={true} visible={isModalVisible}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
@@ -241,7 +233,6 @@ export default function ExamScreen() {
                         <Text style={styles.modalDescription}>{isAllAnswered ? "Are you sure you want to submit? Changes cannot be undone." : "You must answer all questions before submitting."}</Text>
                         <View style={styles.modalButtonRow}>
                             <TouchableOpacity onPress={() => setIsModalVisible(false)}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
-                            {/* Panggil handleSubmitExam di sini */}
                             <TouchableOpacity onPress={handleSubmitExam} disabled={!isAllAnswered}>
                                 <Text style={[styles.modalSubmitText, !isAllAnswered && { color: '#666' }]}>Submit</Text>
                             </TouchableOpacity>
@@ -250,20 +241,18 @@ export default function ExamScreen() {
                 </View>
             </Modal>
 
-            {/* Modal Sukses dan List tetap sama seperti kode asli Anda */}
             <Modal animationType="fade" transparent={true} visible={isSuccessModalVisible}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <CheckCircle color="#00E676" size={60} style={{ marginBottom: 15 }} />
                         <Text style={styles.modalTitle}>Exam Submitted Successfully</Text>
-                        <TouchableOpacity onPress={() => router.replace('./')} style={{ marginTop: 20 }}>
+                        <TouchableOpacity onPress={() => router.replace('/mahasiswa' as any)} style={{ marginTop: 20 }}>
                             <Text style={styles.modalSubmitText}>Back to Dashboard</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
 
-            {/* Modal Question List — grid navigasi soal */}
             <Modal
                 animationType="fade"
                 transparent={true}
@@ -280,7 +269,7 @@ export default function ExamScreen() {
                         </View>
 
                         <View style={styles.gridContainer}>
-                            {DUMMY_QUESTIONS.map((q, index) => {
+                            {QUESTIONS.map((q: any, index: number) => {
                                 const isAnswered = !!answers[q.id];
                                 const isCurrent = index === currentQuestionIndex;
                                 return (
@@ -293,7 +282,7 @@ export default function ExamScreen() {
                                         onPress={() => handleJumpToQuestion(index)}
                                     >
                                         <Text style={[styles.gridText, isCurrent && { color: '#FFFFFF' }]}>
-                                            {q.number}
+                                            {index + 1}
                                         </Text>
                                     </TouchableOpacity>
                                 );

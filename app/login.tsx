@@ -56,8 +56,7 @@ export default function LoginScreen() {
         Alert.alert('Gagal Login', 'Data profil user tidak ditemukan.');
       }
     } catch (error: any) {
-      // Menampilkan pesan error yang lebih jelas dari Firebase
-      Alert.alert('Gagal Login', 'Email atau Password salah!');
+      Alert.alert('Gagal Login', error.message);
       console.error(error);
     }
   };
