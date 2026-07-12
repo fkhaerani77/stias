@@ -1,4 +1,5 @@
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { addDoc, collection } from 'firebase/firestore';
 import { AlertTriangle, CheckCircle, LayoutGrid, Timer } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -15,6 +16,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useExam } from '../../context/ExamContext';
 
@@ -23,7 +25,7 @@ export default function ExamScreen() {
     const navigation = useNavigation();
     const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
     const { addHistory, addViolation, categories, getQuestionsForCategory } = useExam();
-    const { profile } = useAuth();
+    const { user, profile } = useAuth();
     const category = categories.find((c: any) => c.id === categoryId);
     // Soal sungguhan dari kategori ini — bukan DUMMY_QUESTIONS lagi
     const QUESTIONS = category ? getQuestionsForCategory(category.id) : [];
@@ -88,7 +90,7 @@ export default function ExamScreen() {
         return `${hours}:${minutes} WIB`;
     };
 
-    const handleSubmitExam = () => {
+    const handleSubmitExam = async () => {
         const totalQuestions = QUESTIONS.length;
         const correctCount = QUESTIONS.filter(
             (q: any) => answers[q.id] === q.correctAnswer
@@ -99,13 +101,16 @@ export default function ExamScreen() {
         const finishedTime = new Date();
         const elapsedMs = finishedTime.getTime() - startTime.getTime();
         const elapsedMinutes = Math.max(1, Math.round(elapsedMs / 60000));
+        const finalStatus = scorePercentage >= PASSING_SCORE ? 'Passed' : 'Failed';
+        const examDate = new Date().toLocaleDateString();
 
+        // 1. Simpan ke state lokal seperti biasa
         addHistory({
             id: Date.now(),
-            categoryId: category?.id,          // penting: dipakai buat cek "sudah pernah dikerjakan" & filter admin nanti
+            categoryId: category?.id,
             title: category?.title || 'Unknown Exam',
-            date: new Date().toLocaleDateString(),
-            status: scorePercentage >= PASSING_SCORE ? 'Passed' : 'Failed',
+            date: examDate,
+            status: finalStatus,
             startTime: formatClock(startTime),
             finishedTime: formatClock(finishedTime),
             duration: `${elapsedMinutes} mins`,
@@ -115,6 +120,30 @@ export default function ExamScreen() {
             correctCount,
             totalQuestions
         });
+
+        // 2. Simpan juga ke Firestore — supaya admin bisa lihat lintas mahasiswa
+        if (user) {
+            try {
+                await addDoc(collection(db, 'examResults'), {
+                    studentId: user.uid,
+                    studentName: profile?.name || '-',
+                    nim: profile?.nim || '-',
+                    kelas: profile?.kelas || '-',
+                    prodi: profile?.prodi || '-',
+                    categoryId: category?.id || null,
+                    categoryTitle: category?.title || 'Unknown Exam',
+                    date: examDate,
+                    timestamp: Date.now(),
+                    status: finalStatus,
+                    score: scorePercentage,
+                    correctCount,
+                    totalQuestions,
+                });
+            } catch (err) {
+                console.error('Gagal menyimpan hasil ujian ke Firestore:', err);
+            }
+        }
+
         examFinishedRef.current = true;
         setIsModalVisible(false);
         setIsSuccessModalVisible(true);

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Award, Bell, ClipboardList, ShieldAlert, Users } from 'lucide-react-native';
+import { Award, ClipboardList, ShieldAlert, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   Image,
@@ -59,9 +59,7 @@ export default function AdminDashboardScreen() {
           />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Dashboard</Text>
-        <TouchableOpacity style={styles.notificationButton}>
-          <Bell color="#61141A" size={24} />
-        </TouchableOpacity>
+        <View style={{ width: 42 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
@@ -80,7 +78,7 @@ export default function AdminDashboardScreen() {
         {/* Banner */}
         <View style={styles.bannerCard}>
           <Text style={styles.bannerTitle}>Welcome!</Text>
-          <Text style={styles.bannerSubtitle}>It's Time to Prove Your Competence</Text>
+          <Text style={styles.bannerSubtitle}>Everything is under your control</Text>
         </View>
 
         <Text style={styles.sectionTitle}>All Services</Text>
@@ -111,7 +109,7 @@ export default function AdminDashboardScreen() {
             <Text style={styles.menuDesc}>Manage exam categories</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuBox} onPress={() => router.push('/admin/certificates' as any)}>
+          <TouchableOpacity style={styles.menuBox} onPress={() => router.push('/admin/certificate' as any)}>
             <View style={styles.menuHeaderRow}>
               <Award color="#FFFFFF" size={24} />
               <Text style={styles.menuTitle}>Certificate</Text>

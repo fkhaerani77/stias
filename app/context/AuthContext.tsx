@@ -11,6 +11,9 @@ interface UserProfile {
   prodi?: string;
   tahun?: string;
   status?: string;
+  nidn?: string;      // BARU — khusus admin
+  jabatan?: string;  // BARU — khusus admin
+  phone?: string;    // BARU — khusus admin
 }
 
 interface AuthContextValue {
