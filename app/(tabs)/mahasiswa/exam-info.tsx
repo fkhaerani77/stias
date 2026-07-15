@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react-native';
-import React from 'react';
+import { ArrowLeft, CheckCircle2, Clock, Lock } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   Platform,
@@ -18,7 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 export default function ExamInfoScreen() {
   const router = useRouter();
   const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
-  const { history, categories, getQuestionsForCategory } = useExam();
+  const { history, categories, getQuestionsForCategory, getExamAccessStatus } = useExam();
 
   const category = categories.find((c: any) => c.id === categoryId);
   const questionCount = category ? getQuestionsForCategory(category.id).length : 0;
@@ -27,6 +27,16 @@ export default function ExamInfoScreen() {
   const completedExam = (history || []).find((item: any) => item.categoryId === categoryId);
   const isCompleted = !!completedExam;
   const { profile } = useAuth();
+
+  // --- Validasi jadwal ujian: akses hanya diizinkan sesuai rentang waktu yang diatur admin ---
+  const [access, setAccess] = useState<any>(null);
+  useEffect(() => {
+    if (!category) return;
+    const update = () => setAccess(getExamAccessStatus(category));
+    update();
+    const timer = setInterval(update, 15000); // recheck tiap 15 detik (untuk auto unlock/lock)
+    return () => clearInterval(timer);
+  }, [category?.id, category?.scheduleTimestamp, category?.duration]);
 
   if (!category) {
     return (
@@ -95,7 +105,18 @@ export default function ExamInfoScreen() {
           <View style={styles.examCard}>
             <View style={styles.examCardHeader}>
               <Text style={styles.examCardTitle}>Exam Information</Text>
-              <View style={[styles.statusDot, { backgroundColor: isCompleted ? '#9CA3AF' : '#00E676' }]} />
+              <View
+                style={[
+                  styles.statusDot,
+                  {
+                    backgroundColor: isCompleted
+                      ? '#9CA3AF'
+                      : access && !access.canStart
+                      ? '#FFD700'
+                      : '#00E676',
+                  },
+                ]}
+              />
             </View>
 
             <View style={styles.infoRow}>
@@ -139,6 +160,15 @@ export default function ExamInfoScreen() {
               <Text style={{ color: '#FFD700', fontSize: 12, marginTop: 8 }}>
                 Belum ada soal di kategori ini. Hubungi admin.
               </Text>
+            ) : access && !access.canStart ? (
+              <View style={styles.lockedRow}>
+                {access.status === 'upcoming' ? (
+                  <Clock color="#FFD700" size={18} />
+                ) : (
+                  <Lock color="#FFD700" size={18} />
+                )}
+                <Text style={styles.completedText}>{access.message}</Text>
+              </View>
             ) : (
               <TouchableOpacity
                 style={styles.startExamButton}
@@ -224,6 +254,15 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   completedText: { color: '#FFFFFF', fontSize: 12, fontWeight: '500', flex: 1, lineHeight: 16 },
+  lockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 10,
+  },
   rulesContainer: { paddingHorizontal: 4, marginBottom: 20 },
   rulesTitle: { fontSize: 18, fontWeight: 'bold', color: '#61141A', marginBottom: 10 },
   ruleItem: { fontSize: 14, color: '#61141A', marginBottom: 6, fontWeight: '500' },

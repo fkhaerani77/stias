@@ -24,11 +24,22 @@ export default function ExamScreen() {
     const router = useRouter();
     const navigation = useNavigation();
     const { categoryId } = useLocalSearchParams<{ categoryId: string }>();
-    const { addHistory, addViolation, categories, getQuestionsForCategory } = useExam();
+    const { addHistory, addViolation, categories, getQuestionsForCategory, getExamAccessStatus } = useExam();
     const { user, profile } = useAuth();
     const category = categories.find((c: any) => c.id === categoryId);
     // Soal sungguhan dari kategori ini — bukan DUMMY_QUESTIONS lagi
     const QUESTIONS = category ? getQuestionsForCategory(category.id) : [];
+
+    // Guard tambahan: tolak akses kalau di luar jadwal, meski user masuk lewat deep link langsung ke layar ini
+    useEffect(() => {
+        if (!category) return;
+        const access = getExamAccessStatus(category);
+        if (!access.canStart) {
+            Alert.alert('Akses Ditolak', access.message, [
+                { text: 'OK', onPress: () => router.replace('/mahasiswa/exam-list' as any) },
+            ]);
+        }
+    }, [category?.id]);
 
     const [isListModalVisible, setIsListModalVisible] = useState(false);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);

@@ -1,13 +1,7 @@
-/**
- * TAMBAHKAN potongan kode ini ke app/_layout.tsx kamu.
- * Ini contoh lengkap bagaimana root layout kamu seharusnya terlihat
- * setelah ditambah deep-link handler notifikasi.
- */
-
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import { AuthProvider } from './context/AuthContext';
 import { ExamProvider } from './context/ExamContext';
 import { requestNotificationPermission } from './utils/notifications';
@@ -27,7 +21,11 @@ export default function RootLayout() {
   }, []);
 
   // Setup notifikasi: minta izin + pasang deep-link handler
+  // CATATAN: expo-notifications belum didukung penuh di platform web (getLastNotificationResponseAsync,
+  // listener, dsb bisa throw). Jadi seluruh blok ini di-skip kalau dijalankan di web.
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+
     requestNotificationPermission();
 
     // Kasus 1: user tap notifikasi SAAT app lagi aktif/di-background (bukan di-kill)

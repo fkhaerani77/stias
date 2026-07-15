@@ -78,7 +78,7 @@ export default function QuestionsCategoryScreen() {
     setActiveCategoryId(category.id);
     setTitle(category.title);
     setSchedule(category.schedule);
-    setScheduleDate(new Date());
+    setScheduleDate(category.scheduleTimestamp ? new Date(category.scheduleTimestamp) : new Date());
     setDuration(String(category.duration));
     setMode('form');
   };
@@ -99,11 +99,13 @@ export default function QuestionsCategoryScreen() {
       return;
     }
 
+    const scheduleTimestamp = scheduleDate.getTime();
+
     if (isEditMode && activeCategory) {
-      updateCategory(activeCategory.id, { title, schedule, duration: durationNumber });
+      updateCategory(activeCategory.id, { title, schedule, scheduleTimestamp, duration: durationNumber });
       Alert.alert('Tersimpan', 'Info kategori berhasil diperbarui.', [{ text: 'OK', onPress: backToList }]);
     } else {
-      addCategory({ title, schedule, duration: durationNumber });
+      addCategory({ title, schedule, scheduleTimestamp, duration: durationNumber });
       Alert.alert('Tersimpan', 'Kategori berhasil ditambahkan.', [{ text: 'OK', onPress: backToList }]);
     }
   };

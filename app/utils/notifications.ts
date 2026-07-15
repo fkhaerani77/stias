@@ -17,6 +17,8 @@ Notifications.setNotificationHandler({
  * (misalnya di root _layout.tsx), sebelum menjadwalkan notifikasi apa pun.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
+  if (Platform.OS === 'web') return false; // expo-notifications tidak didukung penuh di web
+
   if (!Device.isDevice) {
     console.log('Notifikasi lokal butuh device fisik — emulator/simulator kadang tidak mendukung penuh.');
   }
@@ -58,6 +60,8 @@ export async function scheduleExamReminder(
   categoryId: string,
   minutesBefore: number = 15
 ): Promise<string | null> {
+  if (Platform.OS === 'web') return null; // notifikasi lokal tidak didukung di web
+
   const reminderTime = new Date(examStartDateTime.getTime() - minutesBefore * 60 * 1000);
   const now = new Date();
 
@@ -90,6 +94,7 @@ export async function scheduleExamReminder(
  * supaya tidak muncul notifikasi "ujian akan dimulai" padahal sudah selesai.
  */
 export async function cancelReminder(notificationId: string) {
+  if (Platform.OS === 'web') return;
   try {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
   } catch (err) {
@@ -107,6 +112,8 @@ export async function sendExamResultNotification(
   score: number,
   categoryId?: string
 ) {
+  if (Platform.OS === 'web') return;
+
   await Notifications.scheduleNotificationAsync({
     content: {
       title: status === 'Passed' ? 'Selamat, Kamu Lulus! 🎉' : 'Hasil Ujian Sudah Keluar',
@@ -123,6 +130,7 @@ export async function sendExamResultNotification(
  * Berguna kalau jadwal ujian berubah/dihapus, supaya reminder lama tidak nyasar.
  */
 export async function cancelAllScheduledReminders() {
+  if (Platform.OS === 'web') return;
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
@@ -130,5 +138,6 @@ export async function cancelAllScheduledReminders() {
  * Lihat semua notifikasi yang masih terjadwal (untuk debugging).
  */
 export async function getAllScheduledReminders() {
+  if (Platform.OS === 'web') return [];
   return Notifications.getAllScheduledNotificationsAsync();
 }
