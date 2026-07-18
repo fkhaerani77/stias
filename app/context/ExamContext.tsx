@@ -1,8 +1,31 @@
-import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { db, secondaryAuth } from '../config/firebase';
-import { scheduleExamReminder, cancelReminder, sendExamResultNotification } from './../utils/notifications';
+import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  arrayRemove,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { db, secondaryAuth } from "../config/firebase";
+import {
+  cancelReminder,
+  scheduleExamReminder,
+  sendExamResultNotification,
+} from "./../utils/notifications";
 
 // ============================================================
 // TIPE DATA
@@ -19,7 +42,7 @@ export interface ExamCategory {
   id: string;
   title: string;
   schedule: string;
-  scheduleTimestamp?: number; // epoch ms, dipakai untuk hitung reminder
+  scheduleTimestamp?: number; // epoch ms, dipakai untuk hitung reminder & validasi akses ujian
   duration: number;
   questionIds: number[];
 }
@@ -33,35 +56,8 @@ export interface StudentAccount {
   tahun: string;
   username: string;
   password: string;
-  status: 'Aktif' | 'Nonaktif';
+  status: "Aktif" | "Nonaktif";
 }
-
-// ============================================================
-// DATA AWAL (seed)
-// ============================================================
-
-const DEFAULT_QUESTION_BANK: ExamQuestion[] = [
-  { id: 1, text: "What does the 'P' stand for in the HTTP protocol name?", options: [{ key: 'A', text: 'Program' }, { key: 'B', text: 'Protocol' }, { key: 'C', text: 'Private' }, { key: 'D', text: 'Process' }], correctAnswer: 'B' },
-  { id: 2, text: "Which network protocol is primarily used for real-time audio and video streaming over IP networks?", options: [{ key: 'A', text: 'HTTP' }, { key: 'B', text: 'FTP' }, { key: 'C', text: 'RTP' }, { key: 'D', text: 'SMTP' }], correctAnswer: 'C' },
-  { id: 3, text: "What is the primary function of the Domain Name System (DNS)?", options: [{ key: 'A', text: 'Encrypting network packets' }, { key: 'B', text: 'Assigning dynamic IP addresses' }, { key: 'C', text: 'Translating human-readable domain names to IP addresses' }, { key: 'D', text: 'Filtering malicious traffic' }], correctAnswer: 'C' },
-  { id: 4, text: "Which layer of the OSI model handles hardware addressing and media access control?", options: [{ key: 'A', text: 'Physical Layer' }, { key: 'B', text: 'Data Link Layer' }, { key: 'C', text: 'Network Layer' }, { key: 'D', text: 'Transport Layer' }], correctAnswer: 'B' },
-  { id: 5, text: "What is the standard port number used for secure web browsing via HTTPS?", options: [{ key: 'A', text: '80' }, { key: 'B', text: '21' }, { key: 'C', text: '443' }, { key: 'D', text: '25' }], correctAnswer: 'C' },
-];
-
-const DEFAULT_CATEGORY: ExamCategory = {
-  id: 'cat-1',
-  title: 'National Competency Test',
-  schedule: '12 Jun 2026 • 09:00 WIB',
-  scheduleTimestamp: Date.now() + 16 * 60 * 1000, // TESTING: 16 menit dari sekarang, biar reminder H-15 langsung kena
-  duration: 90,
-  questionIds: [1, 2, 3, 4, 5],
-};
-
-const DEFAULT_STUDENTS: StudentAccount[] = [
-  { id: 'std-1', name: 'Fauzia Khaerani', nim: '145423012', kelas: 'TI-3A', prodi: 'Teknik Informatika', tahun: '2023', username: '145423012', password: '123456', status: 'Aktif' },
-  { id: 'std-2', name: "Fatchatus Sa'adah", nim: '145423014', kelas: 'TI-3A', prodi: 'Teknik Informatika', tahun: '2023', username: '145423014', password: '123456', status: 'Aktif' },
-  { id: 'std-3', name: 'M. Zinal Idris', nim: '145423015', kelas: 'SI-3B', prodi: 'Sistem Informasi', tahun: '2023', username: '145423015', password: '123456', status: 'Aktif' },
-];
 
 // ============================================================
 // CONTEXT
@@ -74,7 +70,12 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
   const addHistory = (examData: any) => {
     setHistory((prev) => [examData, ...prev]);
     // Kirim notifikasi OS instan begitu hasil ujian keluar
-    sendExamResultNotification(examData.title, examData.status, examData.score, examData.categoryId);
+    sendExamResultNotification(
+      examData.title,
+      examData.status,
+      examData.score,
+      examData.categoryId,
+    );
   };
 
   const [violations, setViolations] = useState<any[]>([]);
@@ -82,53 +83,137 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
     setViolations((prev) => [violationData, ...prev]);
   };
 
-  const [questionBank, setQuestionBank] = useState<ExamQuestion[]>(DEFAULT_QUESTION_BANK);
+  // ------------------------------------------------------------
+  // QUESTION BANK — terintegrasi Firestore (collection: "questions")
+  // ------------------------------------------------------------
+  const [questionBank, setQuestionBank] = useState<ExamQuestion[]>([]);
 
-  const addQuestion = (question: Omit<ExamQuestion, 'id'>) => {
+  useEffect(() => {
+    const q = query(collection(db, "questions"), orderBy("createdAt", "asc"));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: ExamQuestion[] = snapshot.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: data.id ?? Number(d.id),
+            text: data.text,
+            options: data.options,
+            correctAnswer: data.correctAnswer,
+          };
+        });
+        setQuestionBank(items);
+      },
+      (error) => console.error("Gagal memuat questions dari Firestore:", error),
+    );
+    return unsubscribe;
+  }, []);
+
+  const addQuestion = (question: Omit<ExamQuestion, "id">) => {
     const newQuestion: ExamQuestion = { ...question, id: Date.now() };
-    setQuestionBank((prev) => [...prev, newQuestion]);
+    // Doc ID Firestore = id numerik (sebagai string) supaya gampang dirujuk dari questionIds kategori
+    setDoc(doc(db, "questions", String(newQuestion.id)), {
+      ...newQuestion,
+      createdAt: serverTimestamp(),
+    }).catch((error) => console.error("Gagal menambah soal:", error));
     return newQuestion;
   };
 
-  const updateQuestion = (questionId: number, updates: Partial<ExamQuestion>) => {
-    setQuestionBank((prev) => prev.map((q) => (q.id === questionId ? { ...q, ...updates } : q)));
-  };
-
-  const deleteQuestion = (questionId: number) => {
-    setQuestionBank((prev) => prev.filter((q) => q.id !== questionId));
-    setCategories((prev) =>
-      prev.map((c) => ({ ...c, questionIds: c.questionIds.filter((id) => id !== questionId) }))
+  const updateQuestion = (
+    questionId: number,
+    updates: Partial<ExamQuestion>,
+  ) => {
+    updateDoc(doc(db, "questions", String(questionId)), updates as any).catch(
+      (error) => console.error("Gagal memperbarui soal:", error),
     );
   };
 
-  const [categories, setCategories] = useState<ExamCategory[]>([DEFAULT_CATEGORY]);
+  const deleteQuestion = (questionId: number) => {
+    deleteDoc(doc(db, "questions", String(questionId))).catch((error) =>
+      console.error("Gagal menghapus soal:", error),
+    );
+    // Lepas soal ini dari semua kategori yang memakainya
+    categories
+      .filter((c) => c.questionIds.includes(questionId))
+      .forEach((c) => {
+        updateDoc(doc(db, "categories", c.id), {
+          questionIds: arrayRemove(questionId),
+        }).catch((error) =>
+          console.error("Gagal melepas soal dari kategori:", error),
+        );
+      });
+  };
 
-  const addCategory = (category: Omit<ExamCategory, 'id' | 'questionIds'>) => {
-    const newCategory: ExamCategory = { ...category, id: `cat-${Date.now()}`, questionIds: [] };
-    setCategories((prev) => [...prev, newCategory]);
+  // ------------------------------------------------------------
+  // KATEGORI UJIAN — terintegrasi Firestore (collection: "categories")
+  // ------------------------------------------------------------
+  const [categories, setCategories] = useState<ExamCategory[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, "categories"), orderBy("createdAt", "asc"));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: ExamCategory[] = snapshot.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            title: data.title,
+            schedule: data.schedule,
+            scheduleTimestamp: data.scheduleTimestamp,
+            duration: data.duration,
+            questionIds: data.questionIds || [],
+          };
+        });
+        setCategories(items);
+      },
+      (error) =>
+        console.error("Gagal memuat categories dari Firestore:", error),
+    );
+    return unsubscribe;
+  }, []);
+
+  const addCategory = (category: Omit<ExamCategory, "id" | "questionIds">) => {
+    const newId = `cat-${Date.now()}`;
+    const newCategory: ExamCategory = {
+      ...category,
+      id: newId,
+      questionIds: [],
+    };
+    setDoc(doc(db, "categories", newId), {
+      title: category.title,
+      schedule: category.schedule,
+      scheduleTimestamp: category.scheduleTimestamp ?? null,
+      duration: category.duration,
+      questionIds: [],
+      createdAt: serverTimestamp(),
+    }).catch((error) => console.error("Gagal menambah kategori:", error));
     return newCategory;
   };
 
-  const updateCategory = (categoryId: string, updates: Partial<ExamCategory>) => {
-    setCategories((prev) => prev.map((c) => (c.id === categoryId ? { ...c, ...updates } : c)));
+  const updateCategory = (
+    categoryId: string,
+    updates: Partial<ExamCategory>,
+  ) => {
+    updateDoc(doc(db, "categories", categoryId), updates as any).catch(
+      (error) => console.error("Gagal memperbarui kategori:", error),
+    );
   };
 
   const deleteCategory = (categoryId: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    deleteDoc(doc(db, "categories", categoryId)).catch((error) =>
+      console.error("Gagal menghapus kategori:", error),
+    );
   };
 
   const toggleQuestionInCategory = (categoryId: string, questionId: number) => {
-    setCategories((prev) =>
-      prev.map((c) => {
-        if (c.id !== categoryId) return c;
-        const alreadyIn = c.questionIds.includes(questionId);
-        return {
-          ...c,
-          questionIds: alreadyIn
-            ? c.questionIds.filter((id) => id !== questionId)
-            : [...c.questionIds, questionId],
-        };
-      })
+    const category = categories.find((c) => c.id === categoryId);
+    if (!category) return;
+    const alreadyIn = category.questionIds.includes(questionId);
+    updateDoc(doc(db, "categories", categoryId), {
+      questionIds: alreadyIn ? arrayRemove(questionId) : arrayUnion(questionId),
+    }).catch((error) =>
+      console.error("Gagal mengubah daftar soal kategori:", error),
     );
   };
 
@@ -140,22 +225,63 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
       .filter(Boolean) as ExamQuestion[];
   };
 
+  // ------------------------------------------------------------
+  // VALIDASI JADWAL UJIAN — akses ujian hanya diizinkan sesuai jadwal
+  // ------------------------------------------------------------
+  // status: 'unscheduled' | 'upcoming' | 'open' | 'closed'
+  const getExamAccessStatus = (category: ExamCategory) => {
+    if (!category.scheduleTimestamp) {
+      return {
+        status: "unscheduled" as const,
+        canStart: false,
+        message: "Jadwal ujian belum diatur oleh admin.",
+      };
+    }
+
+    const now = Date.now();
+    const opensAt = category.scheduleTimestamp;
+    const closesAt = opensAt + category.duration * 60 * 1000;
+
+    if (now < opensAt) {
+      return {
+        status: "upcoming" as const,
+        canStart: false,
+        message: `Ujian belum dibuka. Mulai pada ${category.schedule}.`,
+        opensAt,
+        closesAt,
+      };
+    }
+
+    if (now > closesAt) {
+      return {
+        status: "closed" as const,
+        canStart: false,
+        message: "Waktu pengerjaan ujian ini sudah berakhir.",
+        opensAt,
+        closesAt,
+      };
+    }
+
+    return {
+      status: "open" as const,
+      canStart: true,
+      message: "Ujian dapat dikerjakan sekarang.",
+      opensAt,
+      closesAt,
+    };
+  };
+
   // --- Jadwalkan notifikasi OS asli (expo-notifications) tiap kali daftar kategori/history berubah ---
-  // Set ini nyimpen kombinasi "id kategori + jadwalnya" yang SUDAH pernah dijadwalkan,
-  // supaya tidak menjadwalkan ulang notifikasi yang sama berkali-kali tiap re-render.
   const scheduledRemindersRef = useRef<Set<string>>(new Set());
-  // Map ini nyimpen notificationId hasil schedule per kategori, dipakai untuk cancel
-  // kalau ternyata mahasiswa sudah mengerjakan ujian sebelum waktu reminder-nya kesampaian.
   const scheduledNotificationIdsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     categories.forEach((cat) => {
-      if (!cat.scheduleTimestamp) return; // belum ada jadwal pasti, skip
+      if (!cat.scheduleTimestamp) return;
 
       const alreadyDone = history.some((h: any) => h.categoryId === cat.id);
 
       if (alreadyDone) {
-        // Ujian ini sudah dikerjakan — kalau masih ada reminder yang ke-schedule, batalkan
         const existingId = scheduledNotificationIdsRef.current[cat.id];
         if (existingId) {
           cancelReminder(existingId);
@@ -165,9 +291,13 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const reminderKey = `${cat.id}-${cat.scheduleTimestamp}`;
-      if (scheduledRemindersRef.current.has(reminderKey)) return; // sudah pernah dijadwalkan
+      if (scheduledRemindersRef.current.has(reminderKey)) return;
 
-      scheduleExamReminder(cat.title, new Date(cat.scheduleTimestamp), cat.id).then((notificationId) => {
+      scheduleExamReminder(
+        cat.title,
+        new Date(cat.scheduleTimestamp),
+        cat.id,
+      ).then((notificationId) => {
         if (notificationId) {
           scheduledNotificationIdsRef.current[cat.id] = notificationId;
         }
@@ -184,11 +314,16 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
 
     categories.forEach((cat) => {
       const alreadyDone = history.some((h: any) => h.categoryId === cat.id);
-      if (!alreadyDone && cat.scheduleTimestamp && cat.scheduleTimestamp > now && cat.scheduleTimestamp <= in48h) {
+      if (
+        !alreadyDone &&
+        cat.scheduleTimestamp &&
+        cat.scheduleTimestamp > now &&
+        cat.scheduleTimestamp <= in48h
+      ) {
         notifications.push({
           id: `reminder-${cat.id}`,
-          type: 'reminder',
-          title: 'Ujian Akan Dimulai',
+          type: "reminder",
+          title: "Ujian Akan Dimulai",
           message: `${cat.title} dijadwalkan ${cat.schedule}`,
           timestamp: cat.scheduleTimestamp,
         });
@@ -198,8 +333,9 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
     history.forEach((h: any) => {
       notifications.push({
         id: `result-${h.id}`,
-        type: 'result',
-        title: h.status === 'Passed' ? 'Selamat, Kamu Lulus!' : 'Hasil Ujian Keluar',
+        type: "result",
+        title:
+          h.status === "Passed" ? "Selamat, Kamu Lulus!" : "Hasil Ujian Keluar",
         message: `${h.title}: Skor ${h.score}%`,
         timestamp: h.id,
       });
@@ -208,25 +344,68 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
     return notifications.sort((a, b) => b.timestamp - a.timestamp);
   };
 
-  const [students, setStudents] = useState<StudentAccount[]>(DEFAULT_STUDENTS);
+  // ------------------------------------------------------------
+  // MAHASISWA — terintegrasi Firestore (collection: "users", role == "mahasiswa")
+  // ------------------------------------------------------------
+  const [students, setStudents] = useState<StudentAccount[]>([]);
 
-  const generatePassword = () => Math.floor(100000 + Math.random() * 900000).toString();
+  useEffect(() => {
+    const q = query(collection(db, "users"), where("role", "==", "mahasiswa"));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const items: StudentAccount[] = snapshot.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            name: data.name,
+            nim: data.nim,
+            kelas: data.kelas,
+            prodi: data.prodi,
+            tahun: data.tahun,
+            username: data.nim,
+            // Password Firebase Auth tidak bisa dibaca ulang; field ini hanya dipakai
+            // untuk ditampilkan sesaat setelah akun dibuat/direset (lihat addStudent & resetStudentPassword).
+            password: data.password || "",
+            status: data.status,
+          };
+        });
+        setStudents(items);
+      },
+      (error) =>
+        console.error("Gagal memuat data mahasiswa dari Firestore:", error),
+    );
+    return unsubscribe;
+  }, []);
 
-  const addStudent = async (student: Omit<StudentAccount, 'id' | 'username' | 'password'>) => {
+  const generatePassword = () =>
+    Math.floor(100000 + Math.random() * 900000).toString();
+
+  const addStudent = async (
+    student: Omit<StudentAccount, "id" | "username" | "password">,
+  ) => {
     const generatedPassword = generatePassword();
     const email = `${student.nim}@student.stias.app`;
 
-    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, generatedPassword);
+    const userCredential = await createUserWithEmailAndPassword(
+      secondaryAuth,
+      email,
+      generatedPassword,
+    );
     const uid = userCredential.user.uid;
 
-    await setDoc(doc(db, 'users', uid), {
-      role: 'mahasiswa',
+    await setDoc(doc(db, "users", uid), {
+      role: "mahasiswa",
       name: student.name,
       nim: student.nim,
       kelas: student.kelas,
       prodi: student.prodi,
       tahun: student.tahun,
       status: student.status,
+      // Disimpan supaya admin masih bisa lihat password login mahasiswa kapan saja dari daftar.
+      // (Firebase Auth tidak pernah menyimpan/mengembalikan password asli.)
+      password: generatedPassword,
+      createdAt: serverTimestamp(),
     });
 
     await signOut(secondaryAuth);
@@ -237,22 +416,36 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
       username: student.nim,
       password: generatedPassword,
     };
-    setStudents((prev) => [...prev, newStudent]);
     return newStudent;
   };
 
-  const resetStudentPassword = (studentId: string) => {
+  // CATATAN PENTING: Firebase Auth (client SDK) tidak mengizinkan satu akun mengganti
+  // password akun LAIN. Reset password "sungguhan" di sisi Auth hanya bisa dilakukan lewat
+  // Firebase Admin SDK (Cloud Function), atau lewat email reset link.
+  // Fungsi ini memperbarui password yang tercatat di Firestore (dipakai untuk ditampilkan
+  // ke admin), TAPI belum mengubah password login asli di Firebase Auth.
+  const resetStudentPassword = async (studentId: string) => {
     const newPassword = generatePassword();
-    setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, password: newPassword } : s)));
+    await updateDoc(doc(db, "users", studentId), { password: newPassword });
     return newPassword;
   };
 
-  const updateStudent = (studentId: string, updates: Partial<StudentAccount>) => {
-    setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, ...updates } : s)));
+  const updateStudent = (
+    studentId: string,
+    updates: Partial<StudentAccount>,
+  ) => {
+    const { id, username, password, ...safeUpdates } = updates as any;
+    updateDoc(doc(db, "users", studentId), safeUpdates).catch((error) =>
+      console.error("Gagal memperbarui data mahasiswa:", error),
+    );
   };
 
+  // CATATAN: ini hanya menghapus dokumen profil mahasiswa di Firestore.
+  // Akun Firebase Auth-nya tidak ikut terhapus dari client SDK (butuh Admin SDK/Cloud Function).
   const deleteStudent = (studentId: string) => {
-    setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    deleteDoc(doc(db, "users", studentId)).catch((error) =>
+      console.error("Gagal menghapus data mahasiswa:", error),
+    );
   };
 
   return (
@@ -272,6 +465,7 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
         deleteCategory,
         toggleQuestionInCategory,
         getQuestionsForCategory,
+        getExamAccessStatus,
         getNotifications,
         students,
         addStudent,
