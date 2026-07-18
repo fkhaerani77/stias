@@ -75,6 +75,7 @@ export default function ExamScreen() {
     });
   };
 
+  // Blokir tombol back fisik (Android) selama ujian berlangsung
   useEffect(() => {
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",

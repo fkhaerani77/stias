@@ -1,16 +1,19 @@
 import { useRouter } from 'expo-router';
-import { signOut } from 'firebase/auth';
-import { ArrowLeft, LogOut, Mail, Shield, User } from 'lucide-react-native';
-import React from 'react';
+import { EmailAuthProvider, reauthenticateWithCredential, signOut, updatePassword } from 'firebase/auth';
+import { ArrowLeft, Lock, LogOut, Mail, Shield, User } from 'lucide-react-native';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Platform,
   StatusBar as RNStatusBar,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -20,6 +23,66 @@ import { useAuth } from '../../context/AuthContext';
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, profile } = useAuth();
+
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'M')}&background=61141A&color=FFFFFF&size=200&bold=true`;
+
+  const resetPasswordForm = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const closeChangePassword = () => {
+    setShowChangePassword(false);
+    resetPasswordForm();
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+      Alert.alert('Data Belum Lengkap', 'Semua kolom wajib diisi.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Password Terlalu Pendek', 'Password baru minimal 6 karakter.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Tidak Cocok', 'Konfirmasi password baru tidak sama.');
+      return;
+    }
+    if (!user?.email) {
+      Alert.alert('Gagal', 'Sesi login tidak valid. Coba login ulang.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Firebase mewajibkan re-autentikasi sebelum mengizinkan ganti password
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+
+      Alert.alert('Berhasil', 'Password berhasil diubah.', [
+        { text: 'OK', onPress: closeChangePassword },
+      ]);
+    } catch (error: any) {
+      let message = 'Terjadi kesalahan. Coba lagi.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+        message = 'Password lama yang kamu masukkan salah.';
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Terlalu banyak percobaan. Coba lagi beberapa saat lagi.';
+      }
+      Alert.alert('Gagal Mengubah Password', message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Yakin ingin keluar dari akun ini?', [
@@ -54,10 +117,9 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
 
         <View style={styles.profileCard}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=60' }}
-            style={styles.avatar}
-          />
+          <View style={styles.avatarWrapper}>
+            <Image source={{ uri: defaultAvatar }} style={styles.avatar} />
+          </View>
           <Text style={styles.userName}>{profile?.name || '-'}</Text>
           <Text style={styles.userRole}>Mahasiswa {profile?.status || ''}</Text>
           <View style={styles.badgeNim}>
@@ -100,7 +162,7 @@ export default function ProfileScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Security</Text>
-        <TouchableOpacity style={styles.menuRow}>
+        <TouchableOpacity style={styles.menuRow} onPress={() => setShowChangePassword(true)}>
           <View style={styles.menuRowLeft}>
             <Shield color="#61141A" size={20} />
             <Text style={styles.menuRowText}>Privacy & Change Password</Text>
@@ -113,6 +175,76 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <Modal animationType="slide" transparent visible={showChangePassword} onRequestClose={closeChangePassword}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ganti Password</Text>
+              <TouchableOpacity onPress={closeChangePassword}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Password Lama</Text>
+              <View style={styles.inputWrapper}>
+                <Lock color="#B08D8F" size={18} />
+                <TextInput
+                  style={styles.input}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Masukkan password saat ini"
+                  placeholderTextColor="#B08D8F"
+                  secureTextEntry
+                />
+              </View>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Password Baru</Text>
+              <View style={styles.inputWrapper}>
+                <Lock color="#B08D8F" size={18} />
+                <TextInput
+                  style={styles.input}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Minimal 6 karakter"
+                  placeholderTextColor="#B08D8F"
+                  secureTextEntry
+                />
+              </View>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Konfirmasi Password Baru</Text>
+              <View style={styles.inputWrapper}>
+                <Lock color="#B08D8F" size={18} />
+                <TextInput
+                  style={styles.input}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Ulangi password baru"
+                  placeholderTextColor="#B08D8F"
+                  secureTextEntry
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleChangePassword}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.submitButtonText}>Simpan Password Baru</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -146,7 +278,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F0EAEB',
   },
-  avatar: { width: 90, height: 90, borderRadius: 45, marginBottom: 16, borderWidth: 3, borderColor: '#61141A' },
+  avatarWrapper: { marginBottom: 16 },
+  avatar: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: '#61141A' },
   userName: { fontSize: 22, fontWeight: 'bold', color: '#61141A' },
   userRole: { fontSize: 14, color: '#aa7a7c', marginTop: 4 },
   badgeNim: { backgroundColor: '#61141A', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, marginTop: 12 },
@@ -189,4 +322,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logoutText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#61141A' },
+  modalClose: { fontSize: 18, fontWeight: 'bold', color: '#61141A' },
+  fieldGroup: { marginBottom: 16 },
+  fieldLabel: { fontSize: 12, color: '#9A9A9A', marginBottom: 6, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: '#E5D6D7',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  input: { flex: 1, fontSize: 14, color: '#61141A', paddingVertical: 12 },
+  submitButton: {
+    backgroundColor: '#61141A',
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  submitButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 },
 });

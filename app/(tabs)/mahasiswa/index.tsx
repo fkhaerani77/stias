@@ -13,11 +13,13 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
 import { useExam } from '../../context/ExamContext';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { getNotifications } = useExam();
+  const { profile } = useAuth();
 
   const [currentDate, setCurrentDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
@@ -82,7 +84,9 @@ export default function DashboardScreen() {
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
 
         <View style={styles.welcomeContainer}>
-          <Text style={styles.greetingText}>Hi, Fauzia!</Text>
+          <Text style={styles.greetingText}>
+            Hi, {profile?.name?.split(' ')[0] || 'Mahasiswa'}!
+          </Text>
           <Text style={styles.subGreetingText}>{greeting}</Text>
         </View>
 

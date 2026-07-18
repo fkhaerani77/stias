@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  where
+  where,
 } from "firebase/firestore";
 import React, {
   createContext,
@@ -272,21 +272,16 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   // --- Jadwalkan notifikasi OS asli (expo-notifications) tiap kali daftar kategori/history berubah ---
-  // Set ini nyimpen kombinasi "id kategori + jadwalnya" yang SUDAH pernah dijadwalkan,
-  // supaya tidak menjadwalkan ulang notifikasi yang sama berkali-kali tiap re-render.
   const scheduledRemindersRef = useRef<Set<string>>(new Set());
-  // Map ini nyimpen notificationId hasil schedule per kategori, dipakai untuk cancel
-  // kalau ternyata mahasiswa sudah mengerjakan ujian sebelum waktu reminder-nya kesampaian.
   const scheduledNotificationIdsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     categories.forEach((cat) => {
-      if (!cat.scheduleTimestamp) return; // belum ada jadwal pasti, skip
+      if (!cat.scheduleTimestamp) return;
 
       const alreadyDone = history.some((h: any) => h.categoryId === cat.id);
 
       if (alreadyDone) {
-        // Ujian ini sudah dikerjakan — kalau masih ada reminder yang ke-schedule, batalkan
         const existingId = scheduledNotificationIdsRef.current[cat.id];
         if (existingId) {
           cancelReminder(existingId);
@@ -296,7 +291,7 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const reminderKey = `${cat.id}-${cat.scheduleTimestamp}`;
-      if (scheduledRemindersRef.current.has(reminderKey)) return; // sudah pernah dijadwalkan
+      if (scheduledRemindersRef.current.has(reminderKey)) return;
 
       scheduleExamReminder(
         cat.title,
@@ -426,9 +421,9 @@ export const ExamProvider = ({ children }: { children: React.ReactNode }) => {
 
   // CATATAN PENTING: Firebase Auth (client SDK) tidak mengizinkan satu akun mengganti
   // password akun LAIN. Reset password "sungguhan" di sisi Auth hanya bisa dilakukan lewat
-  // Firebase Admin SDK (Cloud Function) yang dipanggil dari sini, atau lewat email reset link.
-  // Untuk saat ini, fungsi di bawah memperbarui password yang tercatat di Firestore (dipakai
-  // untuk ditampilkan ke admin), TAPI belum mengubah password login asli di Firebase Auth.
+  // Firebase Admin SDK (Cloud Function), atau lewat email reset link.
+  // Fungsi ini memperbarui password yang tercatat di Firestore (dipakai untuk ditampilkan
+  // ke admin), TAPI belum mengubah password login asli di Firebase Auth.
   const resetStudentPassword = async (studentId: string) => {
     const newPassword = generatePassword();
     await updateDoc(doc(db, "users", studentId), { password: newPassword });
