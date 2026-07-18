@@ -67,12 +67,30 @@ export default function ExamScreen() {
   const examFinishedRef = useRef(false);
 
   const logViolation = (type: string) => {
+    const timestamp = new Date().toLocaleString("id-ID");
+
+    // 1. Simpan ke state lokal seperti biasa — ditampilkan di menu Integrity Report mahasiswa
     addViolation({
       id: Date.now() + Math.random(),
       examTitle: category?.title || "Unknown Exam",
       type,
-      timestamp: new Date().toLocaleString("id-ID"),
+      timestamp,
     });
+
+    // 2. Simpan juga ke Firestore — supaya admin bisa lihat lintas mahasiswa
+    if (user) {
+      addDoc(collection(db, "violations"), {
+        studentId: user.uid,
+        studentName: profile?.name || "-",
+        nim: profile?.nim || "-",
+        examTitle: category?.title || "Unknown Exam",
+        type,
+        timestamp,
+        timestampMs: Date.now(),
+      }).catch((err) =>
+        console.error("Gagal menyimpan pelanggaran ke Firestore:", err),
+      );
+    }
   };
 
   // Blokir tombol back fisik (Android) selama ujian berlangsung
