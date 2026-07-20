@@ -28,6 +28,17 @@ export default function DashboardScreen() {
 
   const notifications = getNotifications();
 
+  // Generate inisial dari nama, maksimal 2 huruf (mis. "Fauzia Khaerani" -> "FK")
+  const getInitials = (name?: string) => {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  };
+
+  const initials = getInitials(profile?.name);
+
   useEffect(() => {
     const updateDateTime = () => {
       const now = new Date();
@@ -67,10 +78,9 @@ export default function DashboardScreen() {
 
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push('/mahasiswa/profile' as any)}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60' }}
-            style={styles.profileImage}
-          />
+          <View style={styles.profileInitialCircle}>
+            <Text style={styles.profileInitialText}>{initials}</Text>
+          </View>
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>Dashboard</Text>
@@ -209,10 +219,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
   },
-  profileImage: {
+  profileInitialCircle: {
     width: 42,
     height: 42,
     borderRadius: 21,
+    backgroundColor: '#61141A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInitialText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 18,

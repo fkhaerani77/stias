@@ -7,17 +7,15 @@ import { Award, ChevronLeft, Download } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useExam } from '../../context/ExamContext';
+import { useAuth } from '../../context/AuthContext'; // sesuaikan path-nya
 
 // ============================================================
 // DATA YANG BISA KAMU SESUAIKAN SENDIRI DI SINI
 // ============================================================
-
-// Data kandidat — samakan dengan yang ditampilkan di exam-info.tsx
-const CANDIDATE = {
-  name: 'Fauzia Khaerani',
-  nim: '14523012',
-  prodi: 'Teknik Informatika',
-};
+// CATATAN: Data kandidat (nama, NIM, prodi) SEKARANG diambil otomatis
+// dari akun yang sedang login lewat useAuth() -> profile.
+// Object CANDIDATE hardcode yang lama sudah dihapus supaya tidak
+// selalu menampilkan "Fauzia Khaerani" untuk semua mahasiswa.
 
 // Data institusi
 const INSTITUTION = {
@@ -41,8 +39,20 @@ const PUKET_1 = {
 
 // ============================================================
 
+// Tipe data kandidat yang sekarang diambil dari profile user yang login
+type Candidate = {
+  name: string;
+  nim: string;
+  prodi: string;
+};
+
 // Template HTML sertifikat. Semua styling inline karena expo-print merender lewat WebView/PDF engine.
-function buildCertificateHtml(item: any, logos: { stikom: string | null; merdeka: string | null }) {
+// `candidate` sekarang jadi parameter, bukan variabel global lagi.
+function buildCertificateHtml(
+  item: any,
+  candidate: Candidate,
+  logos: { stikom: string | null; merdeka: string | null }
+) {
   return `
     <html>
       <head>
@@ -231,8 +241,8 @@ function buildCertificateHtml(item: any, logos: { stikom: string | null; merdeka
               <div class="subtitle">Certificate of Competency</div>
 
               <div class="presented">Dengan ini menyatakan bahwa</div>
-              <div class="name">${CANDIDATE.name}</div>
-              <div class="nimProdi">NIM ${CANDIDATE.nim} &middot; Program Studi ${CANDIDATE.prodi}</div>
+              <div class="name">${candidate.name}</div>
+              <div class="nimProdi">NIM ${candidate.nim} &middot; Program Studi ${candidate.prodi}</div>
 
               <div class="description">
                 Telah dinyatakan <b>LULUS</b> mengikuti <span class="examTitle">${item.title}</span>
@@ -273,6 +283,7 @@ function buildCertificateHtml(item: any, logos: { stikom: string | null; merdeka
 export default function CertificateScreen() {
   const router = useRouter();
   const { history } = useExam();
+  const { profile } = useAuth(); // data user yang sedang login (name, nim, prodi, dll)
   const [generatingId, setGeneratingId] = useState<number | null>(null);
   const logosRef = useRef<{ stikom: string | null; merdeka: string | null }>({ stikom: null, merdeka: null });
 
@@ -314,7 +325,16 @@ export default function CertificateScreen() {
   const handleDownload = async (item: any) => {
     try {
       setGeneratingId(item.id);
-      const html = buildCertificateHtml(item, logosRef.current);
+
+      // Data kandidat sekarang diambil dari akun yang sedang login,
+      // bukan dari object CANDIDATE hardcode lagi.
+      const candidate: Candidate = {
+        name: profile?.name ?? '-',
+        nim: profile?.nim ?? '-',
+        prodi: profile?.prodi ?? '-',
+      };
+
+      const html = buildCertificateHtml(item, candidate, logosRef.current);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
 
       const canShare = await Sharing.isAvailableAsync();

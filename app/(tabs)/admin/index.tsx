@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { Award, ClipboardList, ShieldAlert, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-  Image,
   Platform,
   StatusBar as RNStatusBar,
   SafeAreaView,
@@ -12,9 +11,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAuth } from '../../context/AuthContext'; // sesuaikan path-nya kalau berbeda
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
+  const { profile } = useAuth(); // ambil data admin yang sedang login
 
   const [currentDate, setCurrentDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
@@ -46,6 +47,19 @@ export default function AdminDashboardScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  // Ambil nama admin dari profile, fallback ke 'Admin' kalau belum ke-load
+  const adminName = profile?.name || 'Admin';
+
+  // Generate inisial dari nama, maksimal 2 huruf (mis. "Erwan Setiawan" -> "ES")
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  };
+
+  const initials = getInitials(adminName);
+
   return (
     <SafeAreaView style={styles.container}>
       <RNStatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
@@ -53,10 +67,9 @@ export default function AdminDashboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push('/admin/profile' as any)}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=100&auto=format&fit=crop&q=60' }}
-            style={styles.profileImage}
-          />
+          <View style={styles.profileInitialCircle}>
+            <Text style={styles.profileInitialText}>{initials}</Text>
+          </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Dashboard</Text>
         <View style={{ width: 42 }} />
@@ -65,7 +78,7 @@ export default function AdminDashboardScreen() {
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Greeting */}
         <View style={styles.welcomeContainer}>
-          <Text style={styles.greetingText}>Hi, Erwan!</Text>
+          <Text style={styles.greetingText}>Hi, {adminName}!</Text>
           <Text style={styles.subGreetingText}>{greeting}</Text>
         </View>
 
@@ -132,11 +145,6 @@ export default function AdminDashboardScreen() {
         {/* Footer */}
         <View style={styles.footerContainer}>
           <Text style={styles.footerSlogan}>One Step Closer to Success!</Text>
-          <Image
-            source={require('../../../assets/images/graduation1.png')}
-            style={styles.footerIllustration}
-            resizeMode="contain"
-          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -158,7 +166,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
   },
-  profileImage: { width: 42, height: 42, borderRadius: 21 },
+  profileInitialCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#61141A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInitialText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
   headerTitle: { fontSize: 18, fontWeight: '600', color: '#61141A' },
   notificationButton: { padding: 4 },
   welcomeContainer: { marginTop: 16, marginBottom: 24 },
@@ -207,5 +227,4 @@ const styles = StyleSheet.create({
   longMenuDesc: { fontSize: 12, color: '#7A2229', marginTop: 2 },
   footerContainer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 110, marginTop: 10 },
   footerSlogan: { fontSize: 14, color: '#61141A', fontWeight: '600', opacity: 0.4, flex: 1 },
-  footerIllustration: { width: 150, height: 120, position: 'absolute', right: -24, bottom: -20 },
 });
